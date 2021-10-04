@@ -1,0 +1,13 @@
+pandas==1.0.1
+geopandas==0.8.2
+rasterio==1.1.8
+matplotlib==3.3.2
+breizhcrops==0.0.2.8
+tensorboard==2.4.0
+sentinelhub==3.3.2
+eo-learn==0.9.1
+torch==1.9.0
+torchvision==0.10.0
+numpy==1.19.5
+sh==1.14.2
+radiant-mlhub==0.3.0
