@@ -12,7 +12,7 @@ The challenge will consist of two tracks:
   * Within-season crop identification, over the South Africa AOI
   * Reusability of models for crop identification from one growing season to the next, over the Germany AOI
 
-The participants will not be required to participate in both challenges. However, the evaluation mechanism behind both tracks are the same, as well as the rules and prize catalogue.
+You can choose to participate in both challenges, or select one of the tracks. However, the evaluation mechanism behind both tracks are the same, as well as the rules and prize catalogue.
 
 This notebook showcases how to download and process the data, but you are free to use any open souce Python library specifically designed to deal with Earth Observation data such as [eo-learn](https://eo-learn.readthedocs.io/en/latest/index.html). In this notebook, the data is stored as `tif` images, `numpy` arrays and `geopandas` dataframes to facilitate processing operations and `torch` is preferred for data processing and training. However, you can use any other Python tool of preference to process the provided data.
 
