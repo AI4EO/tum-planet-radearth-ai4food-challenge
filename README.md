@@ -30,16 +30,16 @@ The challenge is organized by [Planet](https://www.planet.com/), [Radiant Earth]
 <div>
     <img src="https://upload.wikimedia.org/wikipedia/commons/3/39/Planet_logo_New.png" width="100" 
          align="left" style="padding-top: 25px; padding-right: 15px; padding-bottom: 20px; padding-left: 15px"/>
-    <img src="https://radiant-assets.s3.us-west-2.amazonaws.com/PrimaryREFLogo.png" width="110" 
+    <img src="https://radiant-assets.s3.us-west-2.amazonaws.com/PrimaryREFLogo.png" width="100" 
          align="left" style="padding-top: 1px; padding-right: 15px; padding-bottom: 30px; padding-left: 15px"/>
-    <img src="https://www.hzdr.de/coltray/img/TUM_logo.png" width="110" 
+    <img src="https://www.hzdr.de/coltray/img/TUM_logo.png" width="100" 
          align="left" style="padding-top: 35px; padding-right: 15px; padding-bottom: 20px; padding-left: 15px"/>
-    <img src="https://www.etp4hpc.eu/img/image/fotos/dlr_logo_engl_schwarz.jpg?&q=100" width="110" 
+    <img src="https://www.etp4hpc.eu/img/image/fotos/dlr_logo_engl_schwarz.jpg?&q=100" width="100" 
          align="left" style="padding-top: 33px; padding-right: 15px; padding-bottom: 20px; padding-left: 15px"/>
-    <img src="https://www.hzdr.de/db/PicOri?pOid=60735" width="110" 
+    <img src="https://www.hzdr.de/db/PicOri?pOid=60735" width="100" 
          align="left" style="padding-top: 25px; padding-right: 5px; padding-bottom: 20px; padding-left: 15px"/>
-    <img src="https://www.arianespace.com/wp-content/uploads/2014/10/esa-logo.bmp" width="110" 
+    <img src="https://www.arianespace.com/wp-content/uploads/2014/10/esa-logo.bmp" width="100" 
          align="left" style="padding-top: 25px; padding-right: 15px; padding-bottom: 20px; padding-left: 15px"/>
-    <img src="https://www.htcr-services.com/wp-content/uploads/2017/05/Bundesministerium_fu%CC%88r_Wirtschaft_und_Energie_Logo.svg_.png" width="110" 
+    <img src="https://www.htcr-services.com/wp-content/uploads/2017/05/Bundesministerium_fu%CC%88r_Wirtschaft_und_Energie_Logo.svg_.png" width="100" 
          align="left" style="padding-top: 20px; padding-right: 15px; padding-bottom: 25px; padding-left: 15px"/>
 </div>
