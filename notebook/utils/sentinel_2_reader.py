@@ -10,7 +10,8 @@ import torch
 from torch.utils.data import Dataset
 import zipfile
 import tarfile
-from sh import gunzip
+
+# from sh import gunzip
 from glob import glob
 import pickle
 import geopandas as gpd
@@ -24,8 +25,18 @@ class S2Reader(Dataset):
     """
     THIS CLASS INITIALIZES THE DATA READER FOR SENTINEL-2 DATA
     """
-    def __init__(self, input_dir, label_dir, label_ids=None, transform=None, min_area_to_ignore = 1000, selected_time_points=None, include_cloud=False):
-        '''
+
+    def __init__(
+        self,
+        input_dir,
+        label_dir,
+        label_ids=None,
+        transform=None,
+        min_area_to_ignore=1000,
+        selected_time_points=None,
+        include_cloud=False,
+    ):
+        """
         THIS FUNCTION INITIALIZES DATA READER.
         :param input_dir: directory of input images in zip format
         :param label_dir: directory of ground-truth polygons in GeoJSON format
@@ -35,15 +46,17 @@ class S2Reader(Dataset):
         :param selected_time_points: If a sub set of the time series will be exploited, it can determine the index of those times in a given time series dataset
 
         :return: None
-        '''
+        """
         self.data_transform = transform
-        self.selected_time_points=selected_time_points
+        self.selected_time_points = selected_time_points
         self.crop_ids = label_ids
         if label_ids is not None and not isinstance(label_ids, list):
             self.crop_ids = label_ids.tolist()
 
         self.npyfolder = input_dir.replace(".zip", "/time_series")
-        self.labels = S2Reader._setup(input_dir, label_dir,self.npyfolder,min_area_to_ignore, include_cloud)
+        self.labels = S2Reader._setup(
+            input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud
+        )
 
     def __len__(self):
         """
@@ -60,7 +73,7 @@ class S2Reader(Dataset):
         feature = self.labels.iloc[item]
 
         npyfile = os.path.join(self.npyfolder, "fid_{}.npz".format(feature.fid))
-        if os.path.exists(npyfile): # use saved numpy array if already created
+        if os.path.exists(npyfile):  # use saved numpy array if already created
             try:
                 object = np.load(npyfile)
                 image_stack = object["image_stack"]
@@ -86,23 +99,22 @@ class S2Reader(Dataset):
         return image_stack, label, mask, feature.fid
 
     @staticmethod
-    def _setup(rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000,include_cloud=False):
+    def _setup(rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000, include_cloud=False):
         """
-         THIS FUNCTION PREPARES THE PLANET READER BY SPLITTING AND RASTERIZING EACH CROP FIELD AND SAVING INTO SEPERATE FILES FOR SPEED UP THE FURTHER USE OF DATA.
+        THIS FUNCTION PREPARES THE PLANET READER BY SPLITTING AND RASTERIZING EACH CROP FIELD AND SAVING INTO SEPERATE FILES FOR SPEED UP THE FURTHER USE OF DATA.
 
-         This utility function unzipps a dataset and performs a field-wise aggregation.
-         results are written to a .npz cache with same name as zippath
+        This utility function unzipps a dataset and performs a field-wise aggregation.
+        results are written to a .npz cache with same name as zippath
 
-         :param rootpath: directory of input images in ZIP format
-         :param labelgeojson: directory of ground-truth polygons in GeoJSON format
-         :param npyfolder: folder to save the field data for each field polygon
-         :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a certain threshold. By default, threshold is 1000 m2
-         :param include_cloud: It includes cloud probabilities inti image_stack if TRUE, othervise it saves the cloud info as sepeate array
-         :return: labels of the saved fields
-         """
+        :param rootpath: directory of input images in ZIP format
+        :param labelgeojson: directory of ground-truth polygons in GeoJSON format
+        :param npyfolder: folder to save the field data for each field polygon
+        :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a certain threshold. By default, threshold is 1000 m2
+        :param include_cloud: It includes cloud probabilities inti image_stack if TRUE, othervise it saves the cloud info as sepeate array
+        :return: labels of the saved fields
+        """
 
-
-        with open(os.path.join(rootpath, "bbox.pkl"), 'rb') as f:
+        with open(os.path.join(rootpath, "bbox.pkl"), "rb") as f:
             bbox = pickle.load(f)
             crs = str(bbox.crs)
             minx, miny, maxx, maxy = bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y
@@ -110,14 +122,16 @@ class S2Reader(Dataset):
         labels = gpd.read_file(labelgeojson)
         # project to same coordinate reference system (crs) as the imagery
         ignore = labels.geometry.area > min_area_to_ignore
-        print(f"INFO: Ignoring {(~ignore).sum()}/{len(ignore)} fields with area < {min_area_to_ignore}m2")
+        print(
+            f"INFO: Ignoring {(~ignore).sum()}/{len(ignore)} fields with area < {min_area_to_ignore}m2"
+        )
         labels = labels.loc[ignore]
-        labels = labels.to_crs(crs) #TODO: CHECK IF NECESSARY
+        labels = labels.to_crs(crs)  # TODO: CHECK IF NECESSARY
 
         bands = np.load(os.path.join(rootpath, "bands.npy"))
-        clp = np.load(os.path.join(rootpath, "clp.npy")) #CLOUD PROBABILITY
+        clp = np.load(os.path.join(rootpath, "clp.npy"))  # CLOUD PROBABILITY
         if include_cloud:
-            bands = np.concatenate([bands, clp], axis=-1) # concat cloud probability
+            bands = np.concatenate([bands, clp], axis=-1)  # concat cloud probability
         _, width, height, _ = bands.shape
 
         bands = bands.transpose(0, 3, 1, 2)
@@ -125,18 +139,31 @@ class S2Reader(Dataset):
 
         transform = rio.transform.from_bounds(minx, miny, maxx, maxy, width, height)
 
-        fid_mask = features.rasterize(zip(labels.geometry, labels.fid), all_touched=True,
-                                      transform=transform, out_shape=(width, height))
-        assert len(np.unique(fid_mask)) > 0, f"WARNING: Vectorized fid mask contains no fields. " \
-                                             f"Does the label geojson {labelgeojson} cover the region defined by {rootpath}?"
+        fid_mask = features.rasterize(
+            zip(labels.geometry, labels.fid),
+            all_touched=True,
+            transform=transform,
+            out_shape=(width, height),
+        )
+        assert len(np.unique(fid_mask)) > 0, (
+            f"WARNING: Vectorized fid mask contains no fields. "
+            f"Does the label geojson {labelgeojson} cover the region defined by {rootpath}?"
+        )
 
-        crop_mask = features.rasterize(zip(labels.geometry, labels.crop_id), all_touched=True,
-                                       transform=transform, out_shape=(width, height))
-        assert len(np.unique(crop_mask)) > 0, f"WARNING: Vectorized fid mask contains no fields. " \
-                                              f"Does the label geojson {labelgeojson} cover the region defined by {rootpath}?"
+        crop_mask = features.rasterize(
+            zip(labels.geometry, labels.crop_id),
+            all_touched=True,
+            transform=transform,
+            out_shape=(width, height),
+        )
+        assert len(np.unique(crop_mask)) > 0, (
+            f"WARNING: Vectorized fid mask contains no fields. "
+            f"Does the label geojson {labelgeojson} cover the region defined by {rootpath}?"
+        )
 
-        for index, feature in tqdm(labels.iterrows(), total=len(labels), position=0, leave=True, desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
-
+        for index, feature in tqdm(
+            labels.iterrows(), total=len(labels), position=0, leave=True
+        ):  # , desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
             npyfile = os.path.join(npyfolder, "fid_{}.npz".format(feature.fid))
             if not os.path.exists(npyfile):
                 left, bottom, right, top = feature.geometry.bounds
@@ -148,16 +175,23 @@ class S2Reader(Dataset):
                 col_end = round(window.col_off) + round(window.width)
 
                 image_stack = bands[:, :, row_start:row_end, col_start:col_end]
-                cloud_stack =clp[:, :, row_start:row_end, col_start:col_end]
+                cloud_stack = clp[:, :, row_start:row_end, col_start:col_end]
                 mask = fid_mask[row_start:row_end, col_start:col_end]
                 mask[mask != feature.fid] = 0
                 mask[mask == feature.fid] = 1
                 os.makedirs(npyfolder, exist_ok=True)
-                np.savez(npyfile, image_stack=image_stack.astype(np.float32), cloud_stack=cloud_stack.astype(np.float32), mask=mask.astype(np.float32), feature=feature.drop("geometry").to_dict())
+                np.savez(
+                    npyfile,
+                    image_stack=image_stack.astype(np.float32),
+                    cloud_stack=cloud_stack.astype(np.float32),
+                    mask=mask.astype(np.float32),
+                    feature=feature.drop("geometry").to_dict(),
+                )
 
         return labels
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     """
     EXAMPLE USAGE OF DATA READER
     """
@@ -166,4 +200,4 @@ if __name__ == '__main__':
 
     labelgeojson = "../data/dlr_fusion_competition_germany_train_labels/dlr_fusion_competition_germany_train_labels_33N_18E_242N/labels.geojson"
     ds = S2Reader(zippath, labelgeojson)
-    X,y,m,fid = ds[0]
+    X, y, m, fid = ds[0]
