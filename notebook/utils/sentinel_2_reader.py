@@ -6,13 +6,12 @@ It defines a data reader for Sentinel-2 eath observation data
 """
 
 import os
-import torch
+import pdb
 from torch.utils.data import Dataset
 import zipfile
-import tarfile
 
 # from sh import gunzip
-from glob import glob
+# from glob import glob
 import pickle
 import geopandas as gpd
 import numpy as np
@@ -55,7 +54,7 @@ class S2Reader(Dataset):
 
         self.npyfolder = input_dir.replace(".zip", "/time_series")
         self.labels = S2Reader._setup(
-            input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud
+            input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud=include_cloud
         )
 
     def __len__(self):
@@ -99,7 +98,13 @@ class S2Reader(Dataset):
         return image_stack, label, mask, feature.fid
 
     @staticmethod
-    def _setup(rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000, include_cloud=False):
+    def _setup(
+        rootpath,
+        labelgeojson,
+        npyfolder,
+        min_area_to_ignore=1000,
+        include_cloud=False,
+    ):
         """
         THIS FUNCTION PREPARES THE PLANET READER BY SPLITTING AND RASTERIZING EACH CROP FIELD AND SAVING INTO SEPERATE FILES FOR SPEED UP THE FURTHER USE OF DATA.
 
@@ -130,6 +135,7 @@ class S2Reader(Dataset):
 
         bands = np.load(os.path.join(rootpath, "bands.npy"))
         clp = np.load(os.path.join(rootpath, "clp.npy"))  # CLOUD PROBABILITY
+
         if include_cloud:
             bands = np.concatenate([bands, clp], axis=-1)  # concat cloud probability
         _, width, height, _ = bands.shape
@@ -137,7 +143,9 @@ class S2Reader(Dataset):
         bands = bands.transpose(0, 3, 1, 2)
         clp = clp.transpose(0, 3, 1, 2)
 
-        transform = rio.transform.from_bounds(minx, miny, maxx, maxy, width, height)
+        transform = rio.transform.from_bounds(
+            west=minx, south=miny, east=maxx, north=maxy, width=width, height=height
+        )
 
         fid_mask = features.rasterize(
             zip(labels.geometry, labels.fid),
@@ -145,10 +153,18 @@ class S2Reader(Dataset):
             transform=transform,
             out_shape=(width, height),
         )
-        assert len(np.unique(fid_mask)) > 0, (
+        ids_in_mask = np.unique(fid_mask)
+        assert len(ids_in_mask) > 0, (
             f"WARNING: Vectorized fid mask contains no fields. "
             f"Does the label geojson {labelgeojson} cover the region defined by {rootpath}?"
         )
+        ids_in_labels = np.unique(labels.fid)
+        ids_missing_in_mask = np.setdiff1d(ids_in_labels, ids_in_mask)
+        if len(ids_missing_in_mask) > 0:
+            print(
+                f"WARNING: {len(ids_missing_in_mask)}/{len(ids_in_labels)} fields are missing from the fid mask"
+            )
+            labels = labels.loc[labels.fid.isin(ids_in_mask)]
 
         crop_mask = features.rasterize(
             zip(labels.geometry, labels.crop_id),
@@ -165,28 +181,34 @@ class S2Reader(Dataset):
             labels.iterrows(), total=len(labels), position=0, leave=True
         ):  # , desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
             npyfile = os.path.join(npyfolder, "fid_{}.npz".format(feature.fid))
-            if not os.path.exists(npyfile):
-                left, bottom, right, top = feature.geometry.bounds
-                window = rio.windows.from_bounds(left, bottom, right, top, transform)
+            if os.path.exists(npyfile):
+                continue
 
-                row_start = round(window.row_off)
-                row_end = round(window.row_off) + round(window.height)
-                col_start = round(window.col_off)
-                col_end = round(window.col_off) + round(window.width)
+            left, bottom, right, top = feature.geometry.bounds
+            window = rio.windows.from_bounds(left, bottom, right, top, transform)
 
-                image_stack = bands[:, :, row_start:row_end, col_start:col_end]
-                cloud_stack = clp[:, :, row_start:row_end, col_start:col_end]
-                mask = fid_mask[row_start:row_end, col_start:col_end]
-                mask[mask != feature.fid] = 0
-                mask[mask == feature.fid] = 1
-                os.makedirs(npyfolder, exist_ok=True)
-                np.savez(
-                    npyfile,
-                    image_stack=image_stack.astype(np.float32),
-                    cloud_stack=cloud_stack.astype(np.float32),
-                    mask=mask.astype(np.float32),
-                    feature=feature.drop("geometry").to_dict(),
-                )
+            row_start = round(window.row_off) if window.row_off > 0 else 0
+            row_end = round(window.row_off) + round(window.height)
+            col_start = round(window.col_off) if window.col_off > 0 else 0
+            col_end = round(window.col_off) + round(window.width)
+
+            image_stack = bands[:, :, row_start:row_end, col_start:col_end]
+            cloud_stack = clp[:, :, row_start:row_end, col_start:col_end]
+            mask = fid_mask[row_start:row_end, col_start:col_end].copy()
+            mask[mask != feature.fid] = 0
+            mask[mask == feature.fid] = 1
+
+            if (mask == 0).all():
+                pdb.set_trace()
+
+            os.makedirs(npyfolder, exist_ok=True)
+            np.savez(
+                npyfile,
+                image_stack=image_stack.astype(np.float32),
+                cloud_stack=cloud_stack.astype(np.float32),
+                mask=mask.astype(np.float32),
+                feature=feature.drop("geometry").to_dict(),
+            )
 
         return labels
 
