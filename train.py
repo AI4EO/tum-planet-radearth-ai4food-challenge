@@ -36,7 +36,7 @@ arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--sequence_length", type=int, default=50)
 arg_parser.add_argument("--batch_size", type=int, default=16)
-arg_parser.add_argument("--num_epochs", type=int, default=20)
+arg_parser.add_argument("--num_epochs", type=int, default=40)
 arg_parser.add_argument(
     "--satellite",
     type=str,
@@ -59,7 +59,12 @@ arg_parser.add_argument("--skip_ndvi", dest="include_ndvi", action="store_false"
 arg_parser.set_defaults(include_ndvi=True)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
+arg_parser.add_argument("--save_model", dest="save_wandb", action="store_true")
+arg_parser.set_defaults(save_model=False)
 config = arg_parser.parse_args().__dict__
+
+assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "planet_5day_2"]
+assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Data loaders
@@ -208,21 +213,21 @@ for epoch in range(config["num_epochs"]):
         y_true=y_true, y_pred=y_pred.cpu().detach().numpy(), labels=np.arange(len(label_names))
     )
 
-    model_path = f"model_dump/{run.id}.pth"
-    torch.save(
-        dict(
-            model_state=model.state_dict(),
-            optimizer_state=optimizer.state_dict(),
-            epoch=epoch,
-            config=config,
-        ),
-        model_path,
-    )
-
     print(
         f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} "
         + scores_msg
     )
+    if config["save_model"]:
+        model_path = f"model_dump/{run.id}.pth"
+        torch.save(
+            dict(
+                model_state=model.state_dict(),
+                optimizer_state=optimizer.state_dict(),
+                epoch=epoch,
+                config=config,
+            ),
+            model_path,
+        )
 
     if not config["enable_wandb"]:
         continue
@@ -253,7 +258,8 @@ for epoch in range(config["num_epochs"]):
 
 
 if config["enable_wandb"]:
-    artifact = wandb.Artifact("model", type="model")
-    artifact.add_file(model_path)
-    run.log_artifact(artifact)
+    if config["save_model"]:
+        artifact = wandb.Artifact("model", type="model")
+        artifact.add_file(model_path)
+        run.log_artifact(artifact)
     run.finish()
