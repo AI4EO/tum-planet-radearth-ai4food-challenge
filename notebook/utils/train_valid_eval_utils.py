@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import matplotlib.pyplot as plt
+import pdb
 import sklearn
 
 
@@ -26,7 +27,7 @@ def confusion_matrix_figure(conf_matrix, labels):
     ax.matshow(cm, cmap=plt.cm.Blues, alpha=0.3)
     for i in range(conf_matrix.shape[0]):
         for j in range(conf_matrix.shape[1]):
-            ax.text(x=j, y=i, s=conf_matrix[i, j], va='center', ha='center', size='xx-large')
+            ax.text(x=j, y=i, s=conf_matrix[i, j], va="center", ha="center", size="xx-large")
 
     ax.set_xticks(np.arange(len(labels)))
     ax.set_yticks(np.arange(len(labels)))
@@ -34,9 +35,9 @@ def confusion_matrix_figure(conf_matrix, labels):
     ax.set_xticklabels(labels)
     ax.set_yticklabels(labels)
 
-    ax.set_xlabel('Predictions', fontsize=18)
-    ax.set_ylabel('Actuals', fontsize=18)
-    ax.set_title('Confusion Matrix', fontsize=18)
+    ax.set_xlabel("Predictions", fontsize=18)
+    ax.set_ylabel("Actuals", fontsize=18)
+    ax.set_title("Confusion Matrix", fontsize=18)
     return fig
 
 
@@ -57,8 +58,12 @@ def metrics(y_true, y_pred):
     recall_micro = sklearn.metrics.recall_score(y_true, y_pred, average="micro")
     recall_macro = sklearn.metrics.recall_score(y_true, y_pred, average="macro")
     recall_weighted = sklearn.metrics.recall_score(y_true, y_pred, average="weighted")
-    precision_micro = sklearn.metrics.precision_score(y_true, y_pred, average="micro", zero_division=0)
-    precision_macro = sklearn.metrics.precision_score(y_true, y_pred, average="macro", zero_division=0)
+    precision_micro = sklearn.metrics.precision_score(
+        y_true, y_pred, average="micro", zero_division=0
+    )
+    precision_macro = sklearn.metrics.precision_score(
+        y_true, y_pred, average="macro", zero_division=0
+    )
     precision_weighted = sklearn.metrics.precision_score(y_true, y_pred, average="weighted")
 
     return dict(
@@ -76,7 +81,7 @@ def metrics(y_true, y_pred):
     )
 
 
-def train_epoch(model, optimizer, criterion, dataloader, device='cpu'):
+def train_epoch(model, optimizer, criterion, dataloader, device="cpu"):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR TRAINING
 
@@ -90,7 +95,7 @@ def train_epoch(model, optimizer, criterion, dataloader, device='cpu'):
     """
     model.train()
     losses = list()
-    with tqdm(enumerate(dataloader), total=len(dataloader),position=0, leave=True) as iterator:
+    with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
         for idx, batch in iterator:
             optimizer.zero_grad()
             x, y_true, _, _ = batch
@@ -102,7 +107,7 @@ def train_epoch(model, optimizer, criterion, dataloader, device='cpu'):
     return torch.stack(losses)
 
 
-def validation_epoch(model, criterion, dataloader, device='cpu'):
+def validation_epoch(model, criterion, dataloader, device="cpu"):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR VALIDATION
 
@@ -131,4 +136,10 @@ def validation_epoch(model, criterion, dataloader, device='cpu'):
                 y_pred_list.append(logprobabilities.argmax(-1))
                 y_score_list.append(logprobabilities.exp())
                 field_ids_list.append(field_id)
-        return torch.stack(losses), torch.cat(y_true_list), torch.cat(y_pred_list), torch.cat(y_score_list), torch.cat(field_ids_list)
+        return (
+            torch.stack(losses),
+            torch.cat(y_true_list),
+            torch.cat(y_pred_list),
+            torch.cat(y_score_list),
+            torch.cat(field_ids_list),
+        )
