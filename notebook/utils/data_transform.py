@@ -9,38 +9,38 @@ import numpy as np
 import torch
 
 
-
-class EOTransformer():
+class EOTransformer:
     """
     THIS CLASS DEFINE A SAMPLE TRANSFORMER FOR DATA AUGMENTATION IN THE TRAINING, VALIDATION, AND TEST DATA LOADING
     """
-    def __init__(self,spatial_encoder=True, normalize=True, image_size=32):
-        '''
+
+    def __init__(self, spatial_encoder=True, normalize=True, image_size=32):
+        """
         THIS FUNCTION INITIALIZES THE DATA TRANSFORMER.
         :param spatial_encoder: It determine if spatial information will be exploited or not. It should be determined in line with the training model.
         :param normalize: It determine if the data to be normalized or not. Default is TRUE
         :param image_size: It determine how the data is partitioned into the NxN windows. Default is 32x32
         :return: None
-        '''
+        """
         self.spatial_encoder = spatial_encoder
-        self.image_size=image_size
-        self.normalize=normalize
+        self.image_size = image_size
+        self.normalize = normalize
 
-    def transform(self,image_stack, mask=None):
-        '''
+    def transform(self, image_stack, mask=None):
+        """
         THIS FUNCTION INITIALIZES THE DATA TRANSFORMER.
         :param image_stack: If it is spatial data, it is in size [Time Stamp, Image Dimension (Channel), Height, Width],
                             If it is not spatial data, it is in size [Time Stamp, Image Dimension (Channel)]
         :param mask: It is spatial mask of the image, to filter out uninterested areas. It is not required in case of having non-spatial data
         :return: image_stack, mask
-                '''
+        """
         if self.spatial_encoder == False:  # average over field mask: T, D = image_stack.shape
-            image_stack = image_stack[:, :, mask > 0].mean(2)
+            assert (mask > 0).any(), "mask all 0s"
+            image_stack = np.mean(image_stack[:, :, mask > 0], axis=2)
             mask = -1  # mask is meaningless now but needs to be constant size for batching
         else:  # crop/pad image to fixed size + augmentations: T, D, H, W = image_stack.shape
             if image_stack.shape[2] >= self.image_size and image_stack.shape[3] >= self.image_size:
                 image_stack, mask = random_crop(image_stack, mask, self.image_size)
-
 
             image_stack, mask = crop_or_pad_to_size(image_stack, mask, self.image_size)
 
@@ -66,34 +66,82 @@ class EOTransformer():
             image_stack -= 0.1014 + np.random.normal(scale=0.01)
             image_stack /= 0.1171 + np.random.normal(scale=0.01)
 
-        return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(np.ascontiguousarray(mask))
+        return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(
+            np.ascontiguousarray(mask)
+        )
+
 
 class PlanetTransform(EOTransformer):
     """
     THIS CLASS INHERITS EOTRANSFORMER FOR DATA AUGMENTATION IN THE PLANET DATA
     """
-    pass #TODO: some advanced approach special to Planet Data might be implemented
+
+    # This is where NDVI should be calculated
+
+    pass  # TODO: some advanced approach special to Planet Data might be implemented
+
 
 class Sentinel1Transform(EOTransformer):
     """
     THIS CLASS INHERITS EOTRANSFORMER FOR DATA AUGMENTATION IN THE SENTINEL-1 DATA
     """
-    pass #TODO: some advanced approach special to Planet Data might be implemented
+
+    pass  # TODO: some advanced approach special to Planet Data might be implemented
+
 
 class Sentinel2Transform(EOTransformer):
     """
     THIS CLASS INHERITS EOTRANSFORMER FOR DATA AUGMENTATION IN THE SENTINEL-2 DATA
     """
-    pass #TODO: some advanced approach special to Planet Data might be implemented
+
+    def __init__(
+        self,
+        include_bands=True,
+        include_cloud=True,
+        include_ndvi=True,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.include_bands = include_bands
+        self.include_cloud = include_cloud
+        self.include_ndvi = include_ndvi
+
+    def transform(self, image_stack, mask=None):
+
+        if self.include_ndvi:
+            nir = image_stack[:, 7]
+            red = image_stack[:, 3]
+            ndvi = (nir - red) / (nir + red)
+            ndvi[nir == red] = 0
+            assert np.isnan(ndvi).sum() == 0, "NDVI contains NaN"
+            ndvi = ndvi[:, np.newaxis]
+
+        # import pdb
+
+        # pdb.set_trace()
+
+        if self.include_bands and self.include_cloud and self.include_ndvi:
+            image_stack = np.concatenate((image_stack, ndvi), axis=1)
+        elif self.include_bands and not self.include_cloud and self.include_ndvi:
+            image_stack = np.concatenate((image_stack[:, :-1], ndvi), axis=1)
+        elif not self.include_bands and self.include_cloud and self.include_ndvi:
+            image_stack = np.concatenate((image_stack[:, -1:], ndvi), axis=1)
+        elif not self.include_bands and not self.include_cloud and self.include_ndvi:
+            image_stack = ndvi
+
+        return super().transform(image_stack, mask)
+
+    pass  # TODO: some advanced approach special to Planet Data might be implemented
+
 
 def random_crop(image_stack, mask, image_size):
-    '''
+    """
     THIS FUNCTION DEFINES RANDOM IMAGE CROPPING.
      :param image_stack: input image in size [Time Stamp, Image Dimension (Channel), Height, Width]
     :param mask: input mask of the image, to filter out uninterested areas [Height, Width]
     :param image_size: It determine how the data is partitioned into the NxN windows
     :return: image_stack, mask
-    '''
+    """
 
     H, W = image_stack.shape[2:]
 
@@ -106,22 +154,29 @@ def random_crop(image_stack, mask, image_size):
     h = np.random.randint(image_size, H - image_size // 2)
     w = np.random.randint(image_size, W - image_size // 2)
 
-    image_stack = image_stack[:, :, h - int(np.floor(image_size // 2)):int(np.ceil(h + image_size // 2)),
-                  w - int(np.floor(image_size // 2)):int(np.ceil(w + image_size // 2))]
-    mask = mask[h - int(np.floor(image_size // 2)):int(np.ceil(h + image_size // 2)),
-           w - int(np.floor(image_size // 2)):int(np.ceil(w + image_size // 2))]
+    image_stack = image_stack[
+        :,
+        :,
+        h - int(np.floor(image_size // 2)) : int(np.ceil(h + image_size // 2)),
+        w - int(np.floor(image_size // 2)) : int(np.ceil(w + image_size // 2)),
+    ]
+    mask = mask[
+        h - int(np.floor(image_size // 2)) : int(np.ceil(h + image_size // 2)),
+        w - int(np.floor(image_size // 2)) : int(np.ceil(w + image_size // 2)),
+    ]
 
     return image_stack, mask
 
-def crop_or_pad_to_size(image_stack,  mask, image_size):
-    '''
+
+def crop_or_pad_to_size(image_stack, mask, image_size):
+    """
     THIS FUNCTION DETERMINES IF IMAGE TO BE CROPPED OR PADDED TO THE GIVEN SIZE.
      :param image_stack: input image in size [Time Stamp, Image Dimension (Channel), Height, Width]
     :param mask: input mask of the image, to filter out uninterested areas [Height, Width]
     :param image_size: It determine how the data is cropped or padded into the NxN windows.
                        If the size of input image is larger than the given image size, it will be cropped, otherwise padded.
     :return: image_stack, mask
-    '''
+    """
     T, D, H, W = image_stack.shape
     hpad = image_size - H
     wpad = image_size - W
@@ -129,16 +184,17 @@ def crop_or_pad_to_size(image_stack,  mask, image_size):
     # local flooring and ceiling helper functions to save some space
     def f(x):
         return int(np.floor(x))
+
     def c(x):
         return int(np.ceil(x))
 
     # crop image if image_size < H,W
     if hpad < 0:
-        image_stack = image_stack[:, :, -c(hpad) // 2:f(hpad) // 2, :]
-        mask = mask[-c(hpad) // 2:f(hpad) // 2, :]
+        image_stack = image_stack[:, :, -c(hpad) // 2 : f(hpad) // 2, :]
+        mask = mask[-c(hpad) // 2 : f(hpad) // 2, :]
     if wpad < 0:
-        image_stack = image_stack[:, :, :, -c(wpad) // 2:f(wpad) // 2]
-        mask = mask[:, -c(wpad) // 2:f(wpad) // 2]
+        image_stack = image_stack[:, :, :, -c(wpad) // 2 : f(wpad) // 2]
+        mask = mask[:, -c(wpad) // 2 : f(wpad) // 2]
     # pad image if image_size > H, W
     if hpad > 0:
         padding = (f(hpad / 2), c(hpad / 2))
