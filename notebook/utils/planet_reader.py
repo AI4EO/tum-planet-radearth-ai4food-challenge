@@ -14,12 +14,22 @@ import zipfile
 import glob
 from tqdm import tqdm
 
+
 class PlanetReader(torch.utils.data.Dataset):
     """
     THIS CLASS INITIALIZES THE DATA READER FOR PLANET DATA
     """
-    def __init__(self, input_dir, label_dir, label_ids=None, transform=None, min_area_to_ignore = 1000,  selected_time_points=None):
-        '''
+
+    def __init__(
+        self,
+        input_dir,
+        label_dir,
+        label_ids=None,
+        transform=None,
+        min_area_to_ignore=1000,
+        selected_time_points=None,
+    ):
+        """
         THIS FUNCTION INITIALIZES DATA READER.
         :param input_dir: directory of input images in TIF format
         :param label_dir: directory of ground-truth polygons in GeoJSON format
@@ -29,22 +39,21 @@ class PlanetReader(torch.utils.data.Dataset):
         :param selected_time_points: If a sub set of the time series will be exploited, it can determine the index of those times in a given time series dataset
 
         :return: None
-        '''
+        """
 
         self.data_transform = transform
         self.selected_time_points = selected_time_points
-        self.crop_ids=label_ids
+        self.crop_ids = label_ids
         if label_ids is not None and not isinstance(label_ids, list):
-            self.crop_ids=label_ids.tolist()
+            self.crop_ids = label_ids.tolist()
 
-        self.npyfolder = os.path.abspath(input_dir + "time_series")
+        self.npyfolder = os.path.abspath(input_dir + "/time_series")
         self.labels = PlanetReader._setup(input_dir, label_dir, self.npyfolder, min_area_to_ignore)
-
 
     def __len__(self):
         """
-         THIS FUNCTION RETURNS THE LENGTH OF DATASET
-         """
+        THIS FUNCTION RETURNS THE LENGTH OF DATASET
+        """
         return len(self.labels)
 
     def __getitem__(self, item):
@@ -56,7 +65,7 @@ class PlanetReader(torch.utils.data.Dataset):
         feature = self.labels.iloc[item]
 
         npyfile = os.path.join(self.npyfolder, "fid_{}.npz".format(feature.fid))
-        if os.path.exists(npyfile): # use saved numpy array if already created
+        if os.path.exists(npyfile):  # use saved numpy array if already created
             try:
                 object = np.load(npyfile)
                 image_stack = object["image_stack"]
@@ -81,7 +90,6 @@ class PlanetReader(torch.utils.data.Dataset):
 
         return image_stack, label, mask, feature.fid
 
-
     @staticmethod
     def _setup(input_dir, label_dir, npyfolder, min_area_to_ignore=1000):
         """
@@ -93,52 +101,76 @@ class PlanetReader(torch.utils.data.Dataset):
         :return: labels of the saved fields
         """
 
-        inputs = glob.glob(input_dir + '/*/*.tif', recursive=True)
+        inputs = glob.glob(input_dir + "/*/*.tif", recursive=True)
         tifs = sorted(inputs)
         labels = gpd.read_file(label_dir)
 
         # read coordinate system of tifs and project labels to the same coordinate reference system (crs)
         with rio.open(tifs[0]) as image:
             crs = image.crs
-            print('INFO: Coordinate system of the data is: {}'.format(crs))
+            print("INFO: Coordinate system of the data is: {}".format(crs))
             transform = image.transform
 
         mask = labels.geometry.area > min_area_to_ignore
-        print(f"INFO: Ignoring {(~mask).sum()}/{len(mask)} fields with area < {min_area_to_ignore}m2")
+        print(
+            f"INFO: Ignoring {(~mask).sum()}/{len(mask)} fields with area < {min_area_to_ignore}m2"
+        )
 
         labels = labels.loc[mask]
-        labels = labels.to_crs(crs) #TODO: CHECK IF REQUIRED
+        labels = labels.to_crs(crs)  # TODO: CHECK IF REQUIRED
 
-        for index, feature in tqdm(labels.iterrows(), total=len(labels), position=0, leave=True, desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
+        for index, feature in tqdm(
+            labels.iterrows(), total=len(labels), position=0, leave=True
+        ):  # , desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
 
             npyfile = os.path.join(npyfolder, "fid_{}.npz".format(feature.fid))
-            if not os.path.exists(npyfile):
+            if os.path.exists(npyfile):
+                continue
 
-                left, bottom, right, top = feature.geometry.bounds
-                window = rio.windows.from_bounds(left, bottom, right, top, transform)
+            left, bottom, right, top = feature.geometry.bounds
+            window = rio.windows.from_bounds(
+                left=left, bottom=bottom, right=right, top=top, transform=transform
+            )
 
-                # reads each tif in tifs on the bounds of the feature. shape T x D x H x W
-                image_stack = np.stack([rio.open(tif).read(window=window) for tif in tifs])
+            # reads each tif in tifs on the bounds of the feature. shape T x D x H x W
+            image_stack = np.stack([rio.open(tif).read(window=window) for tif in tifs])
 
-                with rio.open(tifs[0]) as src:
-                    win_transform = src.window_transform(window)
+            with rio.open(tifs[0]) as src:
+                win_transform = src.window_transform(window)
 
-                out_shape = image_stack[0, 0].shape
-                assert out_shape[0] > 0 and out_shape[1] > 0, "WARNING: fid:{} image stack shape {} is zero in one dimension".format(feature.fid,image_stack.shape)
+            import pdb
 
-                # rasterize polygon to get positions of field within crop
-                mask = features.rasterize(feature.geometry, all_touched=True,transform=win_transform, out_shape=image_stack[0, 0].shape)
+            pdb.set_trace()
 
-                #mask[mask != feature.fid] = 0
-                #mask[mask == feature.fid] = 1
-                os.makedirs(npyfolder, exist_ok=True)
-                np.savez(npyfile, image_stack=image_stack, mask=mask, feature=feature.drop("geometry").to_dict())
+            out_shape = image_stack[0, 0].shape
+            assert (
+                out_shape[0] > 0 and out_shape[1] > 0
+            ), "WARNING: fid:{} image stack shape {} is zero in one dimension".format(
+                feature.fid, image_stack.shape
+            )
 
+            # rasterize polygon to get positions of field within crop
+            mask = features.rasterize(
+                feature.geometry,
+                all_touched=True,
+                transform=win_transform,
+                out_shape=image_stack[0, 0].shape,
+            )
+
+            # mask[mask != feature.fid] = 0
+            # mask[mask == feature.fid] = 1
+            os.makedirs(npyfolder, exist_ok=True)
+            np.savez(
+                npyfile,
+                image_stack=image_stack,
+                mask=mask,
+                feature=feature.drop("geometry").to_dict(),
+            )
 
         return labels
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """
     EXAMPLE USAGE OF DATA READER
     """
@@ -146,5 +178,5 @@ if __name__ == '__main__':
     zippath = "../data/dlr_fusion_competition_germany_train_source_planet_5day"
 
     labelgeojson = "../data/dlr_fusion_competition_germany_train_labels/dlr_fusion_competition_germany_train_labels_33N_18E_242N/labels.geojson"
-    ds = PlanetReader(zippath, labelgeojson, selected_time_points=[2,3,4])
-    X,y,m,fid = ds[0]
+    ds = PlanetReader(zippath, labelgeojson, selected_time_points=[2, 3, 4])
+    X, y, m, fid = ds[0]

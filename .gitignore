@@ -2,5 +2,6 @@
 venv
 notebook/
 data
+DENETHOR
 model_dump
 wandb
