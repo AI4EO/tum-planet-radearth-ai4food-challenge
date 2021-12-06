@@ -34,7 +34,7 @@ class EOTransformer:
         :param mask: It is spatial mask of the image, to filter out uninterested areas. It is not required in case of having non-spatial data
         :return: image_stack, mask
         """
-        if self.spatial_encoder == False:  # average over field mask: T, D = image_stack.shape
+        if self.spatial_encoder is False:  # average over field mask: T, D = image_stack.shape
             assert (mask > 0).any(), "mask all 0s"
             image_stack = np.mean(image_stack[:, :, mask > 0], axis=2)
             mask = -1  # mask is meaningless now but needs to be constant size for batching
