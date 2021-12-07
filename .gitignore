@@ -6,3 +6,5 @@ DENETHOR
 slurm
 model_dump
 wandb
+__pycache__
+submissions
