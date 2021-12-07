@@ -3,5 +3,6 @@ venv
 notebook/
 data
 DENETHOR
+slurm
 model_dump
 wandb

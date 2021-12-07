@@ -1,0 +1,19 @@
+program: train.py
+method: random
+metric:
+  goal: minimize
+  name: losses.valid
+parameters:
+  spatial_backbone:
+    value: none
+  num_epochs:
+    value: 40
+  batch_size:
+    values: [8, 16, 32, 64, 128]
+  lr:
+    max: 0.002
+    min: 0.00005
+    distribution: uniform
+early_terminate:
+  type: hyperband
+  min_iter: 3
