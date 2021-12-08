@@ -138,10 +138,6 @@ class PlanetReader(torch.utils.data.Dataset):
             with rio.open(tifs[0]) as src:
                 win_transform = src.window_transform(window)
 
-            import pdb
-
-            pdb.set_trace()
-
             out_shape = image_stack[0, 0].shape
             assert (
                 out_shape[0] > 0 and out_shape[1] > 0
