@@ -19,12 +19,11 @@ from notebook.utils.sentinel_1_reader import S1Reader
 from notebook.utils.sentinel_2_reader import S2Reader
 
 seed = 42
+prefix = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/"
 torch.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
 torch.cuda.manual_seed_all(seed)
-# torch.use_deterministic_algorithms(True)
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Parameters
@@ -50,6 +49,7 @@ arg_parser.add_argument("--lr", type=float, default=1e-3)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
 arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mobilenet_v3_small")
+arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
@@ -67,7 +67,7 @@ config = arg_parser.parse_args().__dict__
 
 
 def load_reader(pos: str):
-    label_file = f"data/{competition}_train_labels/{competition}_train_labels_{pos}/labels.geojson"
+    label_file = f"{prefix}/data/{competition}_train_labels/{competition}_train_labels_{pos}/labels.geojson"
     labels = gpd.read_file(label_file)
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
@@ -90,7 +90,7 @@ def load_reader(pos: str):
 
     if satellite == "sentinel_1":
         reader = S1Reader(
-            input_dir=f"data/{tif_folder}/{tif_folder}_{pos}_asc_{pos}_2017",
+            input_dir=f"{prefix}/data/{tif_folder}/{tif_folder}_{pos}_asc_{pos}_2017",
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=1000,
@@ -98,7 +98,7 @@ def load_reader(pos: str):
         )
     elif satellite == "sentinel_2":
         reader = S2Reader(
-            input_dir=f"data/{tif_folder}/{tif_folder}_{pos}_{pos}_2017",
+            input_dir=f"{prefix}/data/{tif_folder}/{tif_folder}_{pos}_{pos}_2017",
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=1000,
@@ -112,7 +112,7 @@ def load_reader(pos: str):
         )
     elif satellite == "planet_5day":
         reader = PlanetReader(
-            input_dir=f"data/{tif_folder}",
+            input_dir=f"{prefix}/data/{tif_folder}",
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=1000,
@@ -146,12 +146,17 @@ data_loader = DataLoader(train_val_reader=reader, validation_split=0.25)
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
 
+print("INFO: Training Dataset Size: {}, Minibatch Count: {}, Batch Size: {}".format(len(train_loader.dataset), len(train_loader), config["batch_size"]))
+print("INFO: Validation Dataset Size: {}, Minibatch Count: {}, Batch Size: {}".format(len(valid_loader.dataset), len(valid_loader), config["batch_size"]))
+
+
 print("\u2713 Data loaders initialized")
 # ----------------------------------------------------------------------------------------------------------------------
 # Initialize model
 # ----------------------------------------------------------------------------------------------------------------------
 model = SpatiotemporalModel(
     spatial_backbone=config["spatial_backbone"],
+    temporal_backbone=config["temporal_backbone"],
     input_dim=config["input_dim"],
     num_classes=len(label_names),
     sequencelength=config["sequence_length"],

@@ -9,7 +9,6 @@ import os
 from torch.utils.data import Dataset
 import zipfile
 import tarfile
-from sh import gunzip
 from glob import glob
 import pickle
 import geopandas as gpd
