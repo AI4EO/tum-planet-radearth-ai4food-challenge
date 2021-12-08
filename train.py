@@ -3,7 +3,6 @@ import random
 from argparse import ArgumentParser
 from pathlib import Path
 
-import geopandas as gpd
 import numpy as np
 import torch
 from sklearn.metrics import confusion_matrix
@@ -34,7 +33,7 @@ arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--sequence_length", type=int, default=50)
 arg_parser.add_argument("--batch_size", type=int, default=64)
-arg_parser.add_argument("--num_epochs", type=int, default=40)
+arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
     "--satellite",
     type=str,
@@ -50,6 +49,7 @@ arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="none")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
+arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.53)
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
 arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_false")
@@ -58,11 +58,9 @@ arg_parser.add_argument("--skip_ndvi", dest="include_ndvi", action="store_false"
 arg_parser.set_defaults(include_ndvi=True)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
-arg_parser.add_argument("--save_model", dest="save_model", action="store_true")
-arg_parser.set_defaults(save_model=False)
 config = arg_parser.parse_args().__dict__
 
-assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "planet_5day_2"]
+assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day"]
 assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -96,6 +94,7 @@ else:
 config["num_classes"] = len(label_names)
 config["classes"] = label_names
 config["input_dim"] = reader[0][0].shape[1]
+config["X_shape"] = reader[0][0].shape
 
 print("\u2713 Datasets initialized")
 
@@ -144,8 +143,8 @@ if config["enable_wandb"]:
 
 # Don't turn on until needed
 # wandb.watch(model, log_freq=100)
-
-for epoch in range(config["num_epochs"]):
+model_path = None
+for epoch in range(config["num_epochs"] + 1):
     train_loss = tveu.train_epoch(model, optimizer, loss_criterion, train_loader, device=DEVICE)
     valid_loss, y_true, y_pred, *_ = tveu.validation_epoch(
         model, loss_criterion, valid_loader, device=DEVICE
@@ -170,7 +169,7 @@ for epoch in range(config["num_epochs"]):
         f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} "
         + scores_msg
     )
-    if config["save_model"]:
+    if config["save_model_validation_threshold"] < valid_loss:
         model_path = f"model_dump/{run.id}/{epoch}.pth"
         Path(model_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -212,7 +211,7 @@ for epoch in range(config["num_epochs"]):
 
 
 if config["enable_wandb"]:
-    if config["save_model"]:
+    if model_path:
         artifact = wandb.Artifact("model", type="model")
         artifact.add_file(model_path)
         run.log_artifact(artifact)
