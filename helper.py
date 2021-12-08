@@ -1,10 +1,13 @@
 import geopandas as gpd
 import pdb
-
+import warnings
+from shapely.errors import ShapelyDeprecationWarning
 from notebook.utils.data_transform import EOTransformer, Sentinel2Transform
 from notebook.utils.planet_reader import PlanetReader
 from notebook.utils.sentinel_1_reader import S1Reader
 from notebook.utils.sentinel_2_reader import S2Reader
+
+warnings.filterwarnings(action="ignore", category=ShapelyDeprecationWarning)
 
 competition = "ref_fusion_competition_south_africa"
 
@@ -69,6 +72,8 @@ def load_reader(
             ).transform,
         )
     elif satellite == "planet_5day":
+        if pos == "34S_19E_259N":
+            input_dir = input_dir + "_259"
         reader = PlanetReader(
             input_dir=input_dir,
             label_ids=label_ids,
