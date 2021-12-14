@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.metrics import confusion_matrix
 from torch.nn import CrossEntropyLoss
@@ -49,8 +50,9 @@ arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
-arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.6)
+arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.8)
 arg_parser.add_argument("--pse_sample_size", type=int, default=64)
+arg_parser.add_argument("--validation_split", type=float, default=0.25)
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
 arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_false")
@@ -90,6 +92,7 @@ if config["pos"] == "both":
     ), f"{label_names_258} and {label_names_259} are not equal"
     label_names = label_names_258
     reader = torch.utils.data.ConcatDataset([reader_258, reader_259])
+    reader.labels = pd.concat([reader_258.labels, reader_259.labels], ignore_index=True)
 else:
     label_names, reader = load_reader(pos=config["pos"], **kwargs)
 
@@ -100,7 +103,7 @@ config["X_shape"] = reader[0][0].shape
 
 print("\u2713 Datasets initialized")
 
-data_loader = DataLoader(train_val_reader=reader, validation_split=0.25)
+data_loader = DataLoader(train_val_reader=reader, validation_split=config["validation_split"], split_by_latitude=True)
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
 

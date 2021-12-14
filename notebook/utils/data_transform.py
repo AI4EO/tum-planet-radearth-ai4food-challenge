@@ -38,7 +38,7 @@ class EOTransformer:
         """
         assert (mask > 0).any(), "mask all 0s"
         if (
-            self.spatial_backbone == "mean_pixel"
+            self.spatial_backbone == "mean_pixel" or self.spatial_backbone == "none"
         ):  # average over field mask: T, D = image_stack.shape
             image_stack = np.mean(image_stack[:, :, mask > 0], axis=2)
             mask = -1  # mask is meaningless now but needs to be constant size for batching
