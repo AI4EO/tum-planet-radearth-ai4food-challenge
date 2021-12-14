@@ -7,6 +7,7 @@ It defines a sample Data Transformer for augmentation
 
 import numpy as np
 import torch
+import pdb
 
 
 class EOTransformer:
@@ -14,17 +15,18 @@ class EOTransformer:
     THIS CLASS DEFINE A SAMPLE TRANSFORMER FOR DATA AUGMENTATION IN THE TRAINING, VALIDATION, AND TEST DATA LOADING
     """
 
-    def __init__(self, spatial_encoder=True, normalize=True, image_size=32):
+    def __init__(self, spatial_backbone="none", normalize=True, image_size=32, pse_sample_size=64):
         """
         THIS FUNCTION INITIALIZES THE DATA TRANSFORMER.
-        :param spatial_encoder: It determine if spatial information will be exploited or not. It should be determined in line with the training model.
+        :param spatial_backbone: It determine if spatial information will be exploited or not. It should be determined in line with the training model.
         :param normalize: It determine if the data to be normalized or not. Default is TRUE
         :param image_size: It determine how the data is partitioned into the NxN windows. Default is 32x32
         :return: None
         """
-        self.spatial_encoder = spatial_encoder
+        self.spatial_backbone = spatial_backbone
         self.image_size = image_size
         self.normalize = normalize
+        self.pse_sample_size = pse_sample_size
 
     def transform(self, image_stack, mask=None):
         """
@@ -34,10 +36,23 @@ class EOTransformer:
         :param mask: It is spatial mask of the image, to filter out uninterested areas. It is not required in case of having non-spatial data
         :return: image_stack, mask
         """
-        if self.spatial_encoder is False:  # average over field mask: T, D = image_stack.shape
-            assert (mask > 0).any(), "mask all 0s"
+        assert (mask > 0).any(), "mask all 0s"
+        if (
+            self.spatial_backbone == "mean_pixel"
+        ):  # average over field mask: T, D = image_stack.shape
             image_stack = np.mean(image_stack[:, :, mask > 0], axis=2)
             mask = -1  # mask is meaningless now but needs to be constant size for batching
+        elif (
+            self.spatial_backbone == "median_pixel"
+        ):  # average over field mask: T, D = image_stack.shape
+            image_stack = np.median(image_stack[:, :, mask > 0], axis=2)
+            mask = -1  # mask is meaningless now but needs to be constant size for batching
+        elif self.spatial_backbone == "pixelsetencoder":
+            # Sample S pixels from image
+            image_stack, mask = random_pixel_set(
+                image_stack, mask, sample_size=self.pse_sample_size
+            )
+
         else:  # crop/pad image to fixed size + augmentations: T, D, H, W = image_stack.shape
             if image_stack.shape[2] >= self.image_size and image_stack.shape[3] >= self.image_size:
                 image_stack, mask = random_crop(image_stack, mask, self.image_size)
@@ -50,14 +65,14 @@ class EOTransformer:
             mask = np.rot90(mask, rot)
 
             # flip up down
-            if np.random.rand() < 0.5:
-                image_stack = np.flipud(image_stack)
-                mask = np.flipud(mask)
+            # if np.random.rand() < 0.5:
+            #     image_stack = np.flipud(image_stack)
+            #     mask = np.flipud(mask)
 
             # flip left right
-            if np.random.rand() < 0.5:
-                image_stack = np.fliplr(image_stack)
-                mask = np.fliplr(mask)
+            # if np.random.rand() < 0.5:
+            #     image_stack = np.fliplr(image_stack)
+            #     mask = np.fliplr(mask)
 
         image_stack = image_stack * 1e-4
 
@@ -205,3 +220,41 @@ def crop_or_pad_to_size(image_stack, mask, image_size):
         image_stack = np.pad(image_stack, ((0, 0), (0, 0), (0, 0), padding))
         mask = np.pad(mask, ((0, 0), padding))
     return image_stack, mask
+
+
+def random_pixel_set(image_stack, mask, sample_size=64, jitter=(0.01, 0.05)):
+    """
+    Author: Vivien Sainte Fare Garnot
+    https://github.com/VSainteuf/lightweight-temporal-attention-pytorch/blob/master/models/pse.py
+    """
+
+    field_pixels = image_stack[:, :, mask > 0]
+    field_pixel_amount = int(mask.sum())
+    if sample_size < field_pixel_amount:
+        idx = np.random.choice(list(range(field_pixel_amount)), size=sample_size, replace=False)
+        random_pixels = field_pixels[:, :, idx]
+        S_mask = np.ones(sample_size, dtype=int)
+
+    elif sample_size > field_pixel_amount:
+        random_pixels = np.zeros((*field_pixels.shape[:2], sample_size))
+        random_pixels[:, :, :field_pixel_amount] = field_pixels
+        random_pixels[:, :, field_pixel_amount:] = np.stack(
+            [random_pixels[:, :, 0]] * (sample_size - field_pixel_amount), axis=-1
+        )
+
+        S_mask = np.zeros(sample_size, dtype=int)
+        S_mask[:field_pixel_amount] = 1
+
+    else:
+        random_pixels = field_pixels
+        S_mask = np.ones(sample_size, dtype=int)
+
+    S_mask = np.stack([S_mask] * field_pixels.shape[0], axis=0)  # Add temporal dimension to mask
+
+    if jitter is not None:
+        sigma, clip = jitter
+        random_pixels = random_pixels + np.clip(
+            sigma * np.random.randn(*random_pixels.shape), -1 * clip, clip
+        )
+
+    return random_pixels, S_mask
