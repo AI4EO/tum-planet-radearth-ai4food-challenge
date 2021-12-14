@@ -7,6 +7,7 @@ It defines Data Loader for training, validation and test partitions using torch 
 
 import numpy as np
 import torch
+import pdb
 
 
 class DataLoader:
@@ -14,7 +15,9 @@ class DataLoader:
     THIS CLASS INITIALIZES THE TRAINING, VALIDATION, AND TEST DATA LOADERS
     """
 
-    def __init__(self, train_val_reader=None, test_reader=None, validation_split=0.2):
+    def __init__(
+        self, train_val_reader=None, test_reader=None, validation_split=0.2, split_by_latitude=False
+    ):
         """
         THIS FUNCTION INITIALIZES THE DATA LOADER.
         :param train_val_reader: data reader inherited from torch.utils.data.Dataset for train/validation partitions
@@ -24,11 +27,18 @@ class DataLoader:
         """
 
         if train_val_reader is not None:
-            indices = list(range(len(train_val_reader)))
-            np.random.RandomState(0).shuffle(indices)
-            split = int(np.floor(validation_split * len(train_val_reader)))
-            print("Split: ", split)
-            train_indices, val_indices = indices[split:], indices[:split]
+            if split_by_latitude:
+                lat = train_val_reader.labels.geometry.centroid.apply(lambda p: p.y)
+                train_indices = (lat[lat <= lat.quantile(1 - validation_split)]).index.to_list()
+                val_indices = (lat[lat > lat.quantile(1 - validation_split)]).index.to_list()
+                np.random.RandomState(0).shuffle(train_indices)
+                np.random.RandomState(0).shuffle(val_indices)
+            else:
+                indices = list(range(len(train_val_reader)))
+                np.random.RandomState(0).shuffle(indices)
+                split = int(np.floor(validation_split * len(train_val_reader)))
+                print("Split: ", split)
+                train_indices, val_indices = indices[split:], indices[:split]
             # Splitting the data into training and validation partitions
             self.train_dataset = torch.utils.data.Subset(train_val_reader, train_indices)
             self.val_dataset = torch.utils.data.Subset(train_val_reader, val_indices)

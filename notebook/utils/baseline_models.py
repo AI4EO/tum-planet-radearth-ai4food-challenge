@@ -6,8 +6,12 @@ Kondmann, Lukas, et al. (2021),
 
 import breizhcrops as bzh
 from torchvision import models
+import pdb
 import torch
 from torch import nn
+
+from notebook.utils.pse import PixelSetEncoder
+
 
 SUPPORTED_TEMPORAL_MODELS = [
     "inceptiontime",
@@ -37,6 +41,7 @@ SUPPORTED_SPATIAL_MODELS = [
     "vgg19",
     "alexnet",
     "squeezenet1_0",
+    "pixelsetencoder",
 ]
 
 
@@ -57,7 +62,7 @@ class SpatiotemporalModel(nn.Module):
     ):
         super(SpatiotemporalModel, self).__init__()
 
-        if spatial_backbone != "none":
+        if spatial_backbone not in ["none", "mean_pixel", "median_pixel"]:
             self.spatial_encoder = SpatialEncoder(
                 backbone=spatial_backbone, input_dim=input_dim, pretrained=pretrained_spatial
             )
@@ -131,12 +136,25 @@ class SpatialEncoder(torch.nn.Module):
             self.model.features[0] = nn.Conv2d(input_dim, 96, kernel_size=(7, 7), stride=(2, 2))
             self.output_dim = self.model.classifier[1].out_channels
 
+        elif "pixelsetencoder" in backbone:
+            self.model = PixelSetEncoder(
+                input_dim=input_dim, mlp1=[input_dim, 32, 64], mlp2=[128, 128], with_extra=False
+            )
+            self.output_dim = self.model.output_dim
+
         self.modelname = backbone.replace("_", "-")
 
     def forward(self, x):
-        N, T, D, H, W = x.shape
-        x = self.model(x.view(N * T, D, H, W))
-        return x.view(N, T, x.shape[1])
+        x, mask = x
+        if self.modelname == "pixelsetencoder":
+            # Pixel-Set : Batch_size x (Sequence length) x Channel x Number of pixels
+            # Pixel-Mask : Batch_size x (Sequence length) x Number of pixels
+            x = self.model((x, mask))
+            return x
+        else:
+            N, T, D, H, W = x.shape
+            x = self.model(x.view(N * T, D, H, W))
+            return x.view(N, T, x.shape[1])
 
 
 class TemporalEncoder(nn.Module):
@@ -172,6 +190,8 @@ class TemporalEncoder(nn.Module):
         self.modelname = backbone
 
     def forward(self, x):
+        if type(x) == tuple:
+            x, _ = x
         return self.model(x)
 
 

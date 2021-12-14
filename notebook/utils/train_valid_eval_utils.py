@@ -98,8 +98,9 @@ def train_epoch(model, optimizer, criterion, dataloader, device="cpu"):
     with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
         for idx, batch in iterator:
             optimizer.zero_grad()
-            x, y_true, _, _ = batch
-            loss = criterion(model.forward(x.to(device)), y_true.to(device))
+            x, y_true, mask, _ = batch
+            model_input = (x.to(device), mask.to(device))
+            loss = criterion(model.forward(model_input), y_true.to(device))
             loss.backward()
             optimizer.step()
             iterator.set_description(f"train loss={loss:.2f}")
@@ -127,8 +128,9 @@ def validation_epoch(model, criterion, dataloader, device="cpu"):
         field_ids_list = list()
         with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
             for idx, batch in iterator:
-                x, y_true, _, field_id = batch
-                logprobabilities = model.forward(x.to(device))
+                x, y_true, mask, field_id = batch
+                model_input = (x.to(device), mask.to(device))
+                logprobabilities = model.forward(model_input)
                 loss = criterion(logprobabilities, y_true.to(device))
                 iterator.set_description(f"valid loss={loss:.2f}")
                 losses.append(loss)
