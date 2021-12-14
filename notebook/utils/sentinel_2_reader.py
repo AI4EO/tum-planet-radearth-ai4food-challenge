@@ -9,9 +9,6 @@ import os
 import pdb
 from torch.utils.data import Dataset
 import zipfile
-
-# from sh import gunzip
-# from glob import glob
 import pickle
 import geopandas as gpd
 import numpy as np
