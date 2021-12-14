@@ -56,14 +56,17 @@ print("\u2713 Model loaded")
 output_list = []
 softmax = torch.nn.Softmax()
 
-for X, _, _, fid in tqdm(
+for X, _, mask, fid in tqdm(
     reader,
     total=len(reader),
     position=0,
     leave=True,
     desc="INFO: Saving predictions:",
 ):
-    logits = model(X.unsqueeze(0).to(DEVICE))
+    if config["spatial_backbone"] == "pixelsetencoder":
+        logits = model((X.unsqueeze(0).to(DEVICE), mask.unsqueeze(0).to(DEVICE)))
+    else:
+        logits = model(X.unsqueeze(0).to(DEVICE))
     predicted_probabilities = softmax(logits).cpu().detach().numpy()[0]
     predicted_class = np.argmax(predicted_probabilities)
 
