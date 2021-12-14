@@ -43,13 +43,14 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
 )
-arg_parser.add_argument("--lr", type=float, default=0.0012)
+arg_parser.add_argument("--lr", type=float, default=0.001)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
 arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
-arg_parser.add_argument("--spatial_backbone", type=str, default="none")
+arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
-arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.53)
+arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.6)
+arg_parser.add_argument("--pse_sample_size", type=int, default=64)
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
 arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_false")
@@ -60,7 +61,7 @@ arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_fa
 arg_parser.set_defaults(enable_wandb=True)
 config = arg_parser.parse_args().__dict__
 
-assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day"]
+assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2"]
 assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -74,6 +75,7 @@ kwargs = dict(
     include_ndvi=config["include_ndvi"],
     image_size=config["image_size"],
     spatial_backbone=config["spatial_backbone"],
+    pse_sample_size=config["pse_sample_size"],
     min_area_to_ignore=1000,
     train_or_test="train",
 )
@@ -169,7 +171,7 @@ for epoch in range(config["num_epochs"] + 1):
         f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} "
         + scores_msg
     )
-    if config["save_model_validation_threshold"] < valid_loss:
+    if config["save_model_validation_threshold"] > valid_loss:
         model_path = f"model_dump/{run.id}/{epoch}.pth"
         Path(model_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(
