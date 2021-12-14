@@ -1,6 +1,6 @@
 .vscode
 venv
-notebook/
+.ipynb_checkpoints
 data
 slurm
 model_dump
