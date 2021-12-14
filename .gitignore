@@ -2,9 +2,12 @@
 venv
 notebook/
 data
-DENETHOR
 slurm
 model_dump
 wandb
 __pycache__
 submissions
+
+# Other repos
+DENETHOR
+lightweight-temporal-attention-pytorch

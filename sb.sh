@@ -7,7 +7,7 @@
 #SBATCH --partition scavenger
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G
-#SBATCH --exclude=cmlgrad02
+#SBATCH --exclude=cmlgrad02,cml12,cmlgrad05
 
 source venv/bin/activate
 srun "$@"
