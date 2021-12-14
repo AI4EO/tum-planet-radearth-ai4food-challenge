@@ -1,22 +1,20 @@
-import geopandas as gpd
-import numpy as np
-import random
 import pdb
-from numpy.lib.function_base import select
-import torch
-import wandb
+import random
 from argparse import ArgumentParser
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
 from sklearn.metrics import confusion_matrix
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
 
+import wandb
+from helper import load_reader
 from notebook.utils import train_valid_eval_utils as tveu
 from notebook.utils.baseline_models import SpatiotemporalModel
 from notebook.utils.data_loader import DataLoader
-from notebook.utils.data_transform import EOTransformer, Sentinel2Transform
-from notebook.utils.planet_reader import PlanetReader
-from notebook.utils.sentinel_1_reader import S1Reader
-from notebook.utils.sentinel_2_reader import S2Reader
 
 seed = 42
 prefix = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/"
@@ -34,8 +32,8 @@ arg_parser = ArgumentParser()
 arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--sequence_length", type=int, default=50)
-arg_parser.add_argument("--batch_size", type=int, default=16)
-arg_parser.add_argument("--num_epochs", type=int, default=20)
+arg_parser.add_argument("--batch_size", type=int, default=64)
+arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
     "--satellite",
     type=str,
@@ -45,12 +43,15 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
 )
-arg_parser.add_argument("--lr", type=float, default=1e-3)
+arg_parser.add_argument("--lr", type=float, default=0.001)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
 arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
-arg_parser.add_argument("--spatial_backbone", type=str, default="mobilenet_v3_small")
+arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
+arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.8)
+arg_parser.add_argument("--pse_sample_size", type=int, default=64)
+arg_parser.add_argument("--validation_split", type=float, default=0.25)
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
 arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_false")
@@ -61,88 +62,47 @@ arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_fa
 arg_parser.set_defaults(enable_wandb=True)
 config = arg_parser.parse_args().__dict__
 
-# ----------------------------------------------------------------------------------------------------------------------
+assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2"]
+assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Data loaders
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-def load_reader(pos: str):
-    label_file = f"{prefix}/data/{competition}_train_labels/{competition}_train_labels_{pos}/labels.geojson"
-    labels = gpd.read_file(label_file)
-    label_ids = labels["crop_id"].unique()
-    label_names = labels["crop_name"].unique()
-
-    zipped_lists = zip(label_ids, label_names)
-    sorted_pairs = sorted(zipped_lists)
-
-    tuples = zip(*sorted_pairs)
-    label_ids, label_names = [list(tuple) for tuple in tuples]
-
-    satellite = config["satellite"]
-    tif_folder = f"{competition}_train_source_{satellite}"
-
-    kwargs = dict(
-        image_size=config["image_size"],
-        spatial_encoder=config["spatial_backbone"] != "none",
-        normalize=True,
-    )
-    default_transform = EOTransformer(**kwargs).transform
-
-    if satellite == "sentinel_1":
-        reader = S1Reader(
-            input_dir=f"{prefix}/data/{tif_folder}/{tif_folder}_{pos}_asc_{pos}_2017",
-            label_ids=label_ids,
-            label_dir=label_file,
-            min_area_to_ignore=1000,
-            transform=default_transform,
-        )
-    elif satellite == "sentinel_2":
-        reader = S2Reader(
-            input_dir=f"{prefix}/data/{tif_folder}/{tif_folder}_{pos}_{pos}_2017",
-            label_ids=label_ids,
-            label_dir=label_file,
-            min_area_to_ignore=1000,
-            include_cloud=config["include_cloud"],
-            transform=Sentinel2Transform(
-                include_cloud=config["include_cloud"],
-                include_ndvi=config["include_ndvi"],
-                include_bands=config["include_bands"],
-                **kwargs,
-            ).transform,
-        )
-    elif satellite == "planet_5day":
-        reader = PlanetReader(
-            input_dir=f"{prefix}/data/{tif_folder}",
-            label_ids=label_ids,
-            label_dir=label_file,
-            min_area_to_ignore=1000,
-            transform=default_transform,
-        )
-
-    return label_names, reader
-
-
+# ---------------------------------------------------------------------------------------------------------------------
 # Initialize data loaders
+kwargs = dict(
+    satellite=config["satellite"],
+    include_bands=config["include_bands"],
+    include_cloud=config["include_cloud"],
+    include_ndvi=config["include_ndvi"],
+    image_size=config["image_size"],
+    spatial_backbone=config["spatial_backbone"],
+    pse_sample_size=config["pse_sample_size"],
+    min_area_to_ignore=1000,
+    train_or_test="train",
+)
+
 if config["pos"] == "both":
-    label_names_258, reader_258 = load_reader("34S_19E_258N")
+    label_names_258, reader_258 = load_reader(pos="34S_19E_258N", **kwargs)
     print("\u2713 Loaded 258")
-    label_names_259, reader_259 = load_reader("34S_19E_259N")
+    label_names_259, reader_259 = load_reader(pos="34S_19E_259N", **kwargs)
     print("\u2713 Loaded 259")
     assert (
         label_names_258 == label_names_259
     ), f"{label_names_258} and {label_names_259} are not equal"
     label_names = label_names_258
     reader = torch.utils.data.ConcatDataset([reader_258, reader_259])
+    reader.labels = pd.concat([reader_258.labels, reader_259.labels], ignore_index=True)
 else:
-    label_names, reader = load_reader(config["pos"])
+    label_names, reader = load_reader(pos=config["pos"], **kwargs)
 
 config["num_classes"] = len(label_names)
 config["classes"] = label_names
 config["input_dim"] = reader[0][0].shape[1]
+config["X_shape"] = reader[0][0].shape
 
 print("\u2713 Datasets initialized")
 
-data_loader = DataLoader(train_val_reader=reader, validation_split=0.25)
+data_loader = DataLoader(train_val_reader=reader, validation_split=config["validation_split"], split_by_latitude=True)
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
 
@@ -191,8 +151,8 @@ if config["enable_wandb"]:
 
 # Don't turn on until needed
 # wandb.watch(model, log_freq=100)
-
-for epoch in range(config["num_epochs"]):
+model_path = None
+for epoch in range(config["num_epochs"] + 1):
     train_loss = tveu.train_epoch(model, optimizer, loss_criterion, train_loader, device=DEVICE)
     valid_loss, y_true, y_pred, *_ = tveu.validation_epoch(
         model, loss_criterion, valid_loader, device=DEVICE
@@ -213,21 +173,22 @@ for epoch in range(config["num_epochs"]):
         y_true=y_true, y_pred=y_pred.cpu().detach().numpy(), labels=np.arange(len(label_names))
     )
 
-    model_path = f"model_dump/{run.id}.pth"
-    torch.save(
-        dict(
-            model_state=model.state_dict(),
-            optimizer_state=optimizer.state_dict(),
-            epoch=epoch,
-            config=config,
-        ),
-        model_path,
-    )
-
     print(
         f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} "
         + scores_msg
     )
+    if config["save_model_validation_threshold"] > valid_loss:
+        model_path = f"model_dump/{run.id}/{epoch}.pth"
+        Path(model_path).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            dict(
+                model_state=model.state_dict(),
+                optimizer_state=optimizer.state_dict(),
+                epoch=epoch,
+                config=config,
+            ),
+            model_path,
+        )
 
     if not config["enable_wandb"]:
         continue
@@ -258,7 +219,8 @@ for epoch in range(config["num_epochs"]):
 
 
 if config["enable_wandb"]:
-    artifact = wandb.Artifact("model", type="model")
-    artifact.add_file(model_path)
-    run.log_artifact(artifact)
+    if model_path:
+        artifact = wandb.Artifact("model", type="model")
+        artifact.add_file(model_path)
+        run.log_artifact(artifact)
     run.finish()

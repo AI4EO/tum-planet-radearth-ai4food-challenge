@@ -9,12 +9,10 @@ import os
 import pdb
 from torch.utils.data import Dataset
 import zipfile
-
-# from sh import gunzip
-# from glob import glob
 import pickle
 import geopandas as gpd
 import numpy as np
+import math
 import rasterio as rio
 from rasterio import features
 from tqdm import tqdm
@@ -188,9 +186,9 @@ class S2Reader(Dataset):
             window = rio.windows.from_bounds(left, bottom, right, top, transform)
 
             row_start = round(window.row_off) if window.row_off > 0 else 0
-            row_end = round(window.row_off) + round(window.height)
+            row_end = math.ceil(window.row_off + window.height)
             col_start = round(window.col_off) if window.col_off > 0 else 0
-            col_end = round(window.col_off) + round(window.width)
+            col_end = math.ceil(window.col_off + window.width)
 
             image_stack = bands[:, :, row_start:row_end, col_start:col_end]
             cloud_stack = clp[:, :, row_start:row_end, col_start:col_end]

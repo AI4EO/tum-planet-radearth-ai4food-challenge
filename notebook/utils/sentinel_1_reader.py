@@ -8,12 +8,12 @@ It defines a data reader for Sentinel-1 eath observation data
 import os
 from torch.utils.data import Dataset
 import zipfile
-import tarfile
-from glob import glob
 import pickle
 import geopandas as gpd
 import numpy as np
 import rasterio as rio
+import pdb
+import math
 from rasterio import features
 from tqdm import tqdm
 
@@ -158,27 +158,32 @@ class S1Reader(Dataset):
         ):  # , desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
 
             npyfile = os.path.join(npyfolder, "fid_{}.npz".format(feature.fid))
-            if not os.path.exists(npyfile):
+            if os.path.exists(npyfile):
+                continue
 
-                left, bottom, right, top = feature.geometry.bounds
-                window = rio.windows.from_bounds(left, bottom, right, top, transform)
+            left, bottom, right, top = feature.geometry.bounds
+            window = rio.windows.from_bounds(left, bottom, right, top, transform)
 
-                row_start = round(window.row_off)
-                row_end = round(window.row_off) + round(window.height)
-                col_start = round(window.col_off)
-                col_end = round(window.col_off) + round(window.width)
+            row_start = round(window.row_off) if window.row_off > 0 else 0
+            row_end = math.ceil(window.row_off + window.height)
+            col_start = round(window.col_off) if window.col_off > 0 else 0
+            col_end = math.ceil(window.col_off + window.width)
 
-                image_stack = bands[:, :, row_start:row_end, col_start:col_end]
-                mask = fid_mask[row_start:row_end, col_start:col_end]
-                mask[mask != feature.fid] = 0
-                mask[mask == feature.fid] = 1
-                os.makedirs(npyfolder, exist_ok=True)
-                np.savez(
-                    npyfile,
-                    image_stack=image_stack.astype(np.float32),
-                    mask=mask.astype(np.float32),
-                    feature=feature.drop("geometry").to_dict(),
-                )
+            image_stack = bands[:, :, row_start:row_end, col_start:col_end]
+            mask = fid_mask[row_start:row_end, col_start:col_end].copy()
+            mask[mask != feature.fid] = 0
+            mask[mask == feature.fid] = 1
+
+            if (mask == 0).all():
+                pdb.set_trace()
+
+            os.makedirs(npyfolder, exist_ok=True)
+            np.savez(
+                npyfile,
+                image_stack=image_stack.astype(np.float32),
+                mask=mask.astype(np.float32),
+                feature=feature.drop("geometry").to_dict(),
+            )
 
         return labels
 
