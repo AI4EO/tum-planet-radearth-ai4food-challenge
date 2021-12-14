@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 import pdb
+import torch
 
 from pathlib import Path
 
@@ -62,6 +63,7 @@ class S1S2Reader(Dataset):
         )
 
         assert self.s1_reader.labels.equals(self.s2_reader.labels)
+        self.labels = self.s1_reader.labels
 
     @staticmethod
     def nearest_ind(items, pivot):
@@ -80,6 +82,6 @@ class S1S2Reader(Dataset):
         assert (s1_mask == s2_mask).all()
 
         s1_aligned = s1_image_stack[self.s1_aligned_index]
-        s1_s2_image_stack = np.concatenate((s2_image_stack, s1_aligned), axis=1)
+        s1_s2_image_stack = torch.cat((s2_image_stack, s1_aligned), dim=1)
 
         return s1_s2_image_stack, s1_label, s1_mask, s1_fid
