@@ -145,7 +145,6 @@ class SpatialEncoder(torch.nn.Module):
         self.modelname = backbone.replace("_", "-")
 
     def forward(self, x):
-        pdb.set_trace()
         x, mask = x
         if self.modelname == "pixelsetencoder":
             # Pixel-Set : Batch_size x (Sequence length) x Channel x Number of pixels
