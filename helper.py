@@ -52,11 +52,14 @@ def load_reader(
     sentinel_1_tif_folder = f"{competition}_{train_or_test}_source_sentinel_1"
     sentinel_2_tif_folder = f"{competition}_{train_or_test}_source_sentinel_2"
     planet_5day_tif_folder = f"{competition}_{train_or_test}_source_planet_5day"
+    planet_daily_tif_folder = f"{competition}_{train_or_test}_source_planet"
     s1_input_dir = f"{root}/{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_2017"
     s2_input_dir = f"{root}/{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_2017"
     planet_5day_input_dir = f"{root}/{planet_5day_tif_folder}"
+    planet_daily_input_dir = f"{root}/{planet_daily_tif_folder}"
     if pos == "34S_19E_259N":
         planet_5day_input_dir = planet_5day_input_dir + "_259"
+        planet_daily_input_dir = planet_daily_input_dir + "_259"
 
     if satellite == "sentinel_1":
         reader = S1Reader(
@@ -99,6 +102,14 @@ def load_reader(
     elif satellite == "planet_5day":
         reader = PlanetReader(
             input_dir=planet_5day_input_dir,
+            label_ids=label_ids,
+            label_dir=label_file,
+            min_area_to_ignore=min_area_to_ignore,
+            transform=default_transform,
+        )
+    elif satellite == "planet_daily":
+        reader = PlanetReader(
+            input_dir=planet_daily_input_dir,
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
