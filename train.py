@@ -59,6 +59,8 @@ arg_parser.add_argument("--skip_ndvi", dest="include_ndvi", action="store_false"
 arg_parser.set_defaults(include_ndvi=True)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
+arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)")
+
 config = arg_parser.parse_args().__dict__
 
 assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2"]
@@ -78,6 +80,7 @@ kwargs = dict(
     pse_sample_size=config["pse_sample_size"],
     min_area_to_ignore=1000,
     train_or_test="train",
+    alignment=config["alignment"]
 )
 
 if config["pos"] == "both":
