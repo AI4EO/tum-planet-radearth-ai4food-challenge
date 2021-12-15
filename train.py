@@ -17,7 +17,6 @@ from notebook.utils.baseline_models import SpatiotemporalModel
 from notebook.utils.data_loader import DataLoader
 
 seed = 42
-prefix = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/"
 torch.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
@@ -38,7 +37,7 @@ arg_parser.add_argument(
     "--satellite",
     type=str,
     default="sentinel_2",
-    help="sentinel_1, sentinel_2, or planet_5day",
+    help="sentinel_1, sentinel_2, planet_5day, or s1_s2",
 )
 arg_parser.add_argument(
     "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
@@ -106,9 +105,10 @@ data_loader = DataLoader(train_val_reader=reader, validation_split=config["valid
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
 
-print("INFO: Training Dataset Size: {}, Minibatch Count: {}, Batch Size: {}".format(len(train_loader.dataset), len(train_loader), config["batch_size"]))
-print("INFO: Validation Dataset Size: {}, Minibatch Count: {}, Batch Size: {}".format(len(valid_loader.dataset), len(valid_loader), config["batch_size"]))
-
+config["train_dataset_size"] = len(train_loader.dataset)
+config["train_minibatch_size"] = len(train_loader)
+config["val_dataset_size"] = len(valid_loader.dataset)
+config["val_minibatch_size"] = len(valid_loader)
 
 print("\u2713 Data loaders initialized")
 # ----------------------------------------------------------------------------------------------------------------------

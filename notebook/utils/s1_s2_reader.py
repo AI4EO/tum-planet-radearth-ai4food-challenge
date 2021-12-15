@@ -41,7 +41,7 @@ class S1S2Reader(Dataset):
         with (Path(s2_input_dir) / "timestamp.pkl").open("rb") as f:
             s2_timesteps = pickle.load(f)
 
-        self.s1_aligned_index = [self.nearest_ind(s1_timesteps, d) for d in s2_timesteps]
+        self.s1_aligned_index = [self.nearest_ind(s2_timesteps, d) for d in s1_timesteps]
 
         self.s1_reader = S1Reader(
             input_dir=s1_input_dir,
@@ -81,7 +81,9 @@ class S1S2Reader(Dataset):
         assert s1_label == s2_label
         assert (s1_mask == s2_mask).all()
 
-        s1_aligned = s1_image_stack[self.s1_aligned_index]
-        s1_s2_image_stack = torch.cat((s2_image_stack, s1_aligned), dim=1)
+        s2_aligned = s2_image_stack[self.s1_aligned_index]
+        s1_s2_image_stack = torch.cat((s2_aligned, s1_image_stack), dim=1)
+
+        assert len(s1_s2_image_stack) == len(self.s1_aligned_index)
 
         return s1_s2_image_stack, s1_label, s1_mask, s1_fid
