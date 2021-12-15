@@ -26,7 +26,7 @@ def load_reader(
     min_area_to_ignore: int = 1000,
     train_or_test: str = "train",
 ):
-    label_file = f"data/{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
+    label_file = f"{root}/{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
     labels = gpd.read_file(label_file)
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
