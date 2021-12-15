@@ -1,6 +1,6 @@
-import argparse
 import numpy as np
 import pandas as pd
+import pdb
 import torch
 import os
 
@@ -43,6 +43,7 @@ print("\u2713 Data loaded")
 
 model = SpatiotemporalModel(
     spatial_backbone=config["spatial_backbone"],
+    temporal_backbone=config["temporal_backbone"],
     input_dim=config["input_dim"],
     num_classes=config["num_classes"],
     sequencelength=config["sequence_length"],
