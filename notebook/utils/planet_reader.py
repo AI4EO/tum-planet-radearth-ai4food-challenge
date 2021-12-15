@@ -12,6 +12,7 @@ import numpy as np
 import os
 import zipfile
 import glob
+import pdb
 from tqdm import tqdm
 
 
@@ -101,7 +102,7 @@ class PlanetReader(torch.utils.data.Dataset):
         :return: labels of the saved fields
         """
 
-        inputs = glob.glob(input_dir + "/*/*.tif", recursive=True)
+        inputs = glob.glob(input_dir + "/*/*sr.tif", recursive=True)
         tifs = sorted(inputs)
         labels = gpd.read_file(label_dir)
 
