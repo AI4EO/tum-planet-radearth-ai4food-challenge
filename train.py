@@ -53,6 +53,7 @@ arg_parser.add_argument("--image_size", type=int, default=32)
 arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.8)
 arg_parser.add_argument("--pse_sample_size", type=int, default=64)
 arg_parser.add_argument("--validation_split", type=float, default=0.25)
+arg_parser.add_argument("--split_by", type=str, default=None, help="latitude or longitude")
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
 arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_false")
@@ -63,9 +64,9 @@ arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_fa
 arg_parser.set_defaults(enable_wandb=True)
 config = arg_parser.parse_args().__dict__
 
-assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2"]
+assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2", "planet_daily"]
 assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
-
+assert config["split_by"] in [None, "latitude", "longitude"]
 # ---------------------------------------------------------------------------------------------------------------------
 # Data loaders
 # ---------------------------------------------------------------------------------------------------------------------
@@ -103,7 +104,11 @@ config["X_shape"] = reader[0][0].shape
 
 print("\u2713 Datasets initialized")
 
-data_loader = DataLoader(train_val_reader=reader, validation_split=config["validation_split"], split_by_latitude=True)
+data_loader = DataLoader(
+    train_val_reader=reader,
+    validation_split=config["validation_split"],
+    split_by=config["split_by"],
+)
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
 
