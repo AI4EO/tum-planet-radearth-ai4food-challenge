@@ -29,6 +29,7 @@ class DataLoader:
         if train_val_reader is not None:
             if split_by_latitude:
                 lat = train_val_reader.labels.geometry.centroid.apply(lambda p: p.y)
+                # NOTE: max(df.index) = 2533 > len(df.index) = 2504; should be accessed with df.loc[index]
                 train_indices = (lat[lat <= lat.quantile(1 - validation_split)]).index.to_list()
                 val_indices = (lat[lat > lat.quantile(1 - validation_split)]).index.to_list()
                 np.random.RandomState(0).shuffle(train_indices)
