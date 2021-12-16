@@ -32,7 +32,6 @@ competition = "ref_fusion_competition_south_africa"
 arg_parser = ArgumentParser()
 arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
-arg_parser.add_argument("--sequence_length", type=int, default=50)
 arg_parser.add_argument("--batch_size", type=int, default=64)
 arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
@@ -100,6 +99,7 @@ else:
 config["num_classes"] = len(label_names)
 config["classes"] = label_names
 config["input_dim"] = reader[0][0].shape[1]
+config["sequence_length"] = reader[0][0].shape[0]
 config["X_shape"] = reader[0][0].shape
 
 print("\u2713 Datasets initialized")
@@ -153,6 +153,7 @@ if config["enable_wandb"]:
 
 # Don't turn on until needed
 # wandb.watch(model, log_freq=100)
+valid_losses = []
 model_path = None
 for epoch in range(config["num_epochs"] + 1):
     train_loss = tveu.train_epoch(model, optimizer, loss_criterion, train_loader, device=DEVICE)
@@ -166,6 +167,7 @@ for epoch in range(config["num_epochs"] + 1):
 
     valid_loss = valid_loss.cpu().detach().numpy()[0]
     train_loss = train_loss.cpu().detach().numpy()[0]
+    valid_losses.append(valid_loss)
 
     scores["epoch"] = epoch
     scores["train_loss"] = train_loss
@@ -197,7 +199,7 @@ for epoch in range(config["num_epochs"] + 1):
 
     wandb.log(
         {
-            "losses": dict(train=train_loss, valid=valid_loss),
+            "losses": dict(train=train_loss, valid=valid_loss, valid_min=min(valid_losses)),
             "epoch": epoch,
             "metrics": {
                 key: scores[key]
