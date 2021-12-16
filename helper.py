@@ -11,7 +11,7 @@ from notebook.utils.s1_s2_reader import S1S2Reader
 warnings.filterwarnings(action="ignore", category=ShapelyDeprecationWarning)
 
 competition = "ref_fusion_competition_south_africa"
-root = "data"
+root = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/data"
 
 
 def load_reader(
