@@ -9,20 +9,19 @@ from tqdm import tqdm
 from argparse import ArgumentParser
 
 from helper import load_reader
-from notebook.utils.baseline_models import SpatiotemporalModel
+from src.utils.baseline_models import SpatiotemporalModel
 
 parser = ArgumentParser()
 parser.add_argument("--model_path", type=str)
-parser.add_argument("--name", type=str)
 args = parser.parse_args()
 
 assert "model_path" in args
-assert "name" in args
 
 # Load model
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 saved = torch.load(args.model_path)
+name = Path(args.model_path).parent.name + "-" + Path(args.model_path).stem
 config = saved["config"]
 
 print(config)
@@ -82,8 +81,8 @@ for X, _, mask, fid in tqdm(
 
 output_frame = pd.DataFrame.from_dict(output_list)
 
-submission_path = Path(f"submissions/{args.name}/34S-20E-259N-2017-submission-{args.name}.json")
+submission_path = Path(f"submissions/{name}/34S-20E-259N-2017-submission-{name}.json")
 submission_path.parent.mkdir(parents=True, exist_ok=True)
 output_frame.to_json(submission_path)
 
-os.system(f"cd submissions && tar czf {args.name}.tar.gz {args.name}")
+os.system(f"cd submissions && tar czf {name}.tar.gz {name}")

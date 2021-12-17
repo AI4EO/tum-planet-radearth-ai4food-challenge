@@ -12,9 +12,9 @@ from torch.optim import Adam
 
 import wandb
 from helper import load_reader
-from notebook.utils import train_valid_eval_utils as tveu
-from notebook.utils.baseline_models import SpatiotemporalModel
-from notebook.utils.data_loader import DataLoader
+from src.utils import train_valid_eval_utils as tveu
+from src.utils.baseline_models import SpatiotemporalModel
+from src.utils.data_loader import DataLoader
 
 seed = 42
 torch.manual_seed(seed)
@@ -49,7 +49,7 @@ arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
-arg_parser.add_argument("--save_model_validation_threshold", type=float, default=0.6)
+arg_parser.add_argument("--save_model_threshold", type=float, default=0.65)
 arg_parser.add_argument("--pse_sample_size", type=int, default=64)
 arg_parser.add_argument("--validation_split", type=float, default=0.1)
 arg_parser.add_argument("--split_by", type=str, default="longitude", help="latitude or longitude")
@@ -181,7 +181,7 @@ for epoch in range(config["num_epochs"] + 1):
         f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} "
         + scores_msg
     )
-    if config["save_model_validation_threshold"] > valid_loss:
+    if config["save_model_threshold"] > valid_loss:
         model_path = f"model_dump/{run.id}/{epoch}.pth"
         Path(model_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(
