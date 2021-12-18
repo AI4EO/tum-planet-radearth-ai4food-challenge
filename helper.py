@@ -4,7 +4,11 @@ import warnings
 
 from pathlib import Path
 from shapely.errors import ShapelyDeprecationWarning
-from src.utils.data_transform import EOTransformer, Sentinel2Transform
+from src.utils.data_transform import (
+    Sentinel1Transform,
+    Sentinel2Transform,
+    PlanetTransform,
+)
 from src.utils.planet_reader import PlanetReader
 from src.utils.sentinel_1_reader import S1Reader
 from src.utils.sentinel_2_reader import S2Reader
@@ -25,6 +29,7 @@ def load_reader(
     include_ndvi: bool,
     image_size: int,
     spatial_backbone: str,
+    include_rvi: bool = False,
     pse_sample_size: int = 64,
     min_area_to_ignore: int = 1000,
     train_or_test: str = "train",
@@ -48,8 +53,8 @@ def load_reader(
         pse_sample_size=pse_sample_size,
         spatial_backbone=spatial_backbone,
         normalize=True,
+        is_train=train_or_test == "train",
     )
-    default_transform = EOTransformer(**kwargs).transform
 
     fill = ""
     if train_or_test == "train":
@@ -75,7 +80,7 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=default_transform,
+            transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
         )
     elif satellite == "sentinel_2":
         reader = S2Reader(
@@ -99,7 +104,7 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             include_cloud=include_cloud,
-            s1_transform=default_transform,
+            s1_transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
             s2_transform=Sentinel2Transform(
                 include_cloud=include_cloud,
                 include_ndvi=include_ndvi,
@@ -113,7 +118,9 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=default_transform,
+            transform=PlanetTransform(
+                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
+            ).transform,
         )
     elif satellite == "planet_daily":
         reader = PlanetReader(
@@ -121,7 +128,9 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=default_transform,
+            transform=PlanetTransform(
+                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
+            ).transform,
         )
 
     return label_names, reader

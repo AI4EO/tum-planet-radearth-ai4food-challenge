@@ -15,7 +15,14 @@ class EOTransformer:
     THIS CLASS DEFINE A SAMPLE TRANSFORMER FOR DATA AUGMENTATION IN THE TRAINING, VALIDATION, AND TEST DATA LOADING
     """
 
-    def __init__(self, spatial_backbone="none", normalize=True, image_size=32, pse_sample_size=64):
+    def __init__(
+        self,
+        spatial_backbone="none",
+        normalize=True,
+        image_size=32,
+        pse_sample_size=64,
+        is_train=True,
+    ):
         """
         THIS FUNCTION INITIALIZES THE DATA TRANSFORMER.
         :param spatial_backbone: It determine if spatial information will be exploited or not. It should be determined in line with the training model.
@@ -27,6 +34,7 @@ class EOTransformer:
         self.image_size = image_size
         self.normalize = normalize
         self.pse_sample_size = pse_sample_size
+        self.is_train = is_train
 
     def transform(self, image_stack, mask=None):
         """
@@ -52,6 +60,14 @@ class EOTransformer:
             image_stack, mask = random_pixel_set(
                 image_stack, mask, sample_size=self.pse_sample_size
             )
+        elif self.spatial_backbone == "random_pixel":
+            if self.is_train:
+                masked_image = image_stack[:, :, mask > 0]
+                idx = np.random.randint(0, masked_image.shape[2] - 1)
+                image_stack = masked_image[:, :, idx]
+            else:
+                image_stack = image_stack[:, :, mask > 0]
+            mask = -1
 
         else:  # crop/pad image to fixed size + augmentations: T, D, H, W = image_stack.shape
             if image_stack.shape[2] >= self.image_size and image_stack.shape[3] >= self.image_size:
@@ -91,9 +107,32 @@ class PlanetTransform(EOTransformer):
     THIS CLASS INHERITS EOTRANSFORMER FOR DATA AUGMENTATION IN THE PLANET DATA
     """
 
-    # This is where NDVI should be calculated
+    def __init__(
+        self,
+        include_bands=True,
+        include_ndvi=True,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.include_bands = include_bands
+        self.include_ndvi = include_ndvi
 
-    pass  # TODO: some advanced approach special to Planet Data might be implemented
+    def transform(self, image_stack, mask=None):
+
+        if self.include_ndvi:
+            red = image_stack[:, 2]
+            nir = image_stack[:, 3]
+            ndvi = (nir - red) / (nir + red)
+            ndvi[nir == red] = 0
+            assert np.isnan(ndvi).sum() == 0, "NDVI contains NaN"
+            ndvi = ndvi[:, np.newaxis]
+
+        if self.include_bands and self.include_ndvi:
+            image_stack = np.concatenate((image_stack, ndvi), axis=1)
+        elif not self.include_bands and self.include_ndvi:
+            image_stack = ndvi
+
+        return super().transform(image_stack, mask)
 
 
 class Sentinel1Transform(EOTransformer):
@@ -101,7 +140,32 @@ class Sentinel1Transform(EOTransformer):
     THIS CLASS INHERITS EOTRANSFORMER FOR DATA AUGMENTATION IN THE SENTINEL-1 DATA
     """
 
-    pass  # TODO: some advanced approach special to Planet Data might be implemented
+    def __init__(
+        self,
+        include_bands=True,
+        include_rvi=True,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.include_bands = include_bands
+        self.include_rvi = include_rvi
+
+    def transform(self, image_stack, mask=None):
+
+        if self.include_rvi:
+            VV = image_stack[:, 0]
+            VH = image_stack[:, 1]
+            dop = VV / (VV + VH)
+            radar_vegetation_index = (np.sqrt(dop)) * ((4 * (VH)) / (VV + VH))
+            assert np.isnan(radar_vegetation_index).sum() == 0, "RVI contains NaN"
+            radar_vegetation_index = radar_vegetation_index[:, np.newaxis]
+
+        if self.include_bands and self.include_rvi:
+            image_stack = np.concatenate((image_stack, radar_vegetation_index), axis=1)
+        elif not self.include_bands and self.include_rvi:
+            image_stack = radar_vegetation_index
+
+        return super().transform(image_stack, mask)
 
 
 class Sentinel2Transform(EOTransformer):
@@ -145,8 +209,6 @@ class Sentinel2Transform(EOTransformer):
             image_stack = ndvi
 
         return super().transform(image_stack, mask)
-
-    pass  # TODO: some advanced approach special to Planet Data might be implemented
 
 
 def random_crop(image_stack, mask, image_size):
