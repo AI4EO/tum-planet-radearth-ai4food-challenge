@@ -33,7 +33,7 @@ arg_parser = ArgumentParser()
 arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
-arg_parser.add_argument("--num_epochs", type=int, default=100)
+arg_parser.add_argument("--num_epochs", type=int, default=40)
 arg_parser.add_argument(
     "--satellite",
     type=str,
@@ -49,9 +49,9 @@ arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
-arg_parser.add_argument("--save_model_threshold", type=float, default=0.65)
-arg_parser.add_argument("--pse_sample_size", type=int, default=64)
-arg_parser.add_argument("--validation_split", type=float, default=0.1)
+arg_parser.add_argument("--save_model_threshold", type=float, default=0.8)
+arg_parser.add_argument("--pse_sample_size", type=int, default=32)
+arg_parser.add_argument("--validation_split", type=float, default=0.2)
 arg_parser.add_argument("--split_by", type=str, default="longitude", help="latitude or longitude")
 arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
 arg_parser.set_defaults(include_bands=True)
@@ -59,6 +59,8 @@ arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_fals
 arg_parser.set_defaults(include_cloud=True)
 arg_parser.add_argument("--skip_ndvi", dest="include_ndvi", action="store_false")
 arg_parser.set_defaults(include_ndvi=True)
+arg_parser.add_argument("--skip_rvi", dest="include_rvi", action="store_false")
+arg_parser.set_defaults(include_rvi=True)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 config = arg_parser.parse_args().__dict__
@@ -75,6 +77,7 @@ kwargs = dict(
     include_bands=config["include_bands"],
     include_cloud=config["include_cloud"],
     include_ndvi=config["include_ndvi"],
+    include_rvi=config["include_rvi"],
     image_size=config["image_size"],
     spatial_backbone=config["spatial_backbone"],
     pse_sample_size=config["pse_sample_size"],
