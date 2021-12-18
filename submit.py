@@ -24,7 +24,10 @@ saved = torch.load(args.model_path)
 name = Path(args.model_path).parent.name + "-" + Path(args.model_path).stem
 config = saved["config"]
 
+print(f"Creating: {name}.tar.gz ")
+
 print(config)
+config["include_ndvi"] = False
 
 _, reader = load_reader(
     satellite=config["satellite"],
@@ -56,33 +59,41 @@ print("\u2713 Model loaded")
 output_list = []
 softmax = torch.nn.Softmax()
 
-for X, _, mask, fid in tqdm(
-    reader,
-    total=len(reader),
-    position=0,
-    leave=True,
-    desc="INFO: Saving predictions:",
-):
-    if config["spatial_backbone"] == "pixelsetencoder":
-        logits = model((X.unsqueeze(0).to(DEVICE), mask.unsqueeze(0).to(DEVICE)))
-    else:
-        logits = model(X.unsqueeze(0).to(DEVICE))
-    predicted_probabilities = softmax(logits).cpu().detach().numpy()[0]
-    predicted_class = np.argmax(predicted_probabilities)
+with torch.no_grad():
+    for X, _, mask, fid in tqdm(
+        reader,
+        total=len(reader),
+        position=0,
+        leave=True,
+        desc="INFO: Saving predictions:",
+    ):
+        if config["spatial_backbone"] == "pixelsetencoder":
+            logits = model((X.unsqueeze(0).to(DEVICE), mask.unsqueeze(0).to(DEVICE)))
+            predicted_probabilities = softmax(logits).cpu().detach().numpy()[0]
+        elif config["spatial_backbone"] == "random_pixel":
+            # Ensemble the pixel predictions
+            logits = model(torch.permute(X, (2, 0, 1)).to(DEVICE)).mean(axis=0)
+            predicted_probabilities = softmax(logits).cpu().detach().numpy()
+        else:
+            logits = model(X.unsqueeze(0).to(DEVICE))
+            predicted_probabilities = softmax(logits).cpu().detach().numpy()[0]
+        predicted_class = np.argmax(predicted_probabilities)
 
-    output_list.append(
-        {
-            "fid": fid,
-            "crop_id": predicted_class + 1,  # save label list
-            "crop_name": config["classes"][predicted_class],
-            "crop_probs": predicted_probabilities,
-        }
-    )
+        output_list.append(
+            {
+                "fid": fid,
+                "crop_id": predicted_class + 1,  # save label list
+                "crop_name": config["classes"][predicted_class],
+                "crop_probs": predicted_probabilities,
+            }
+        )
 
 output_frame = pd.DataFrame.from_dict(output_list)
 
 submission_path = Path(f"submissions/{name}/34S-20E-259N-2017-submission-{name}.json")
 submission_path.parent.mkdir(parents=True, exist_ok=True)
 output_frame.to_json(submission_path)
+
+print(f"Saving: {name}.tar.gz ")
 
 os.system(f"cd submissions && tar czf {name}.tar.gz {name}")
