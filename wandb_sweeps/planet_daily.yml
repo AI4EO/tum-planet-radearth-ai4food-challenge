@@ -1,0 +1,22 @@
+program: train.py
+method: random
+metric:
+  goal: minimize
+  name: losses.valid
+parameters:
+  spatial_backbone:
+    values:
+    - mean_pixel
+    - median_pixel
+    - pixelsetencoder
+    - random_pixel
+  pse_sample_size:
+    value: 32
+  temporal_backbone:
+    value: tempcnn
+  batch_size:
+    values: [64, 128]
+  satellite:
+    value: planet_daily
+  lr:
+    values: [0.001, 0.0001, 0.00001]
