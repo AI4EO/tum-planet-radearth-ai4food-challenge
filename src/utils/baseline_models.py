@@ -62,7 +62,7 @@ class SpatiotemporalModel(nn.Module):
     ):
         super(SpatiotemporalModel, self).__init__()
 
-        if spatial_backbone not in ["none", "mean_pixel", "median_pixel"]:
+        if spatial_backbone not in ["none", "mean_pixel", "median_pixel", "random_pixel"]:
             self.spatial_encoder = SpatialEncoder(
                 backbone=spatial_backbone, input_dim=input_dim, pretrained=pretrained_spatial
             )
