@@ -9,6 +9,7 @@ from torchvision import models
 import pdb
 import torch
 from torch import nn
+from src.utils.ltae import LTAE
 
 from src.utils.pse import PixelSetEncoder
 
@@ -20,6 +21,7 @@ SUPPORTED_TEMPORAL_MODELS = [
     "starrnn",
     "tempcnn",
     "transformermodel",
+    "ltae",
 ]
 SUPPORTED_SPATIAL_MODELS = [
     "resnet18",
@@ -186,6 +188,20 @@ class TemporalEncoder(nn.Module):
             )
         if backbone == "transformermodel":
             self.model = bzh.models.TransformerModel(input_dim=input_dim, num_classes=num_classes)
+
+        if backbone == "ltae":
+            self.model = LTAE(
+                in_channels=input_dim,
+                n_head=16,
+                d_k=8,
+                d_model=256,
+                n_neurons=[256, 128],
+                dropout=0.2,
+                T=1000,
+                len_max_seq=sequencelength,
+                positions=None,
+                return_att=False,
+            )
 
         self.modelname = backbone
 

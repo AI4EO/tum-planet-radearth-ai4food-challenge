@@ -26,6 +26,7 @@ class LTAE(nn.Module):
         len_max_seq=24,
         positions=None,
         return_att=False,
+        mlp4=[128, 64, 32, 5],
     ):
         """
         Sequence-to-embedding encoder.
@@ -49,6 +50,9 @@ class LTAE(nn.Module):
         self.positions = positions
         self.n_neurons = copy.deepcopy(n_neurons)
         self.return_att = return_att
+
+        # Add decoder here directly
+        self.decoder = get_decoder(mlp4)
 
         if positions is None:
             positions = len_max_seq + 1
@@ -115,9 +119,9 @@ class LTAE(nn.Module):
         enc_output = self.outlayernorm(self.dropout(self.mlp(enc_output)))
 
         if self.return_att:
-            return enc_output, attn
+            return self.decoder(enc_output), attn
         else:
-            return enc_output
+            return self.decoder(enc_output)
 
 
 class MultiHeadAttention(nn.Module):
@@ -225,3 +229,19 @@ def get_sinusoid_encoding_table_var(positions, d_hid, clip=4, offset=3, T=1000):
         return torch.FloatTensor(sinusoid_table).cuda()
     else:
         return torch.FloatTensor(sinusoid_table)
+
+
+def get_decoder(n_neurons):
+    """Returns an MLP with the layer widths specified in n_neurons.
+    Every linear layer but the last one is followed by BatchNorm + ReLu
+
+    args:
+        n_neurons (list): List of int that specifies the width and length of the MLP.
+    """
+    layers = []
+    for i in range(len(n_neurons) - 1):
+        layers.append(nn.Linear(n_neurons[i], n_neurons[i + 1]))
+        if i < (len(n_neurons) - 2):
+            layers.extend([nn.BatchNorm1d(n_neurons[i + 1]), nn.ReLU()])
+    m = nn.Sequential(*layers)
+    return m
