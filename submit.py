@@ -27,7 +27,6 @@ config = saved["config"]
 print(f"Creating: {name}.tar.gz ")
 
 print(config)
-config["include_ndvi"] = False
 
 _, reader = load_reader(
     satellite=config["satellite"],
@@ -56,8 +55,8 @@ model.load_state_dict(saved["model_state"])
 model.eval()
 print("\u2713 Model loaded")
 
-output_list = []
 softmax = torch.nn.Softmax()
+output_list = []
 
 with torch.no_grad():
     for X, _, mask, fid in tqdm(
@@ -72,8 +71,17 @@ with torch.no_grad():
             predicted_probabilities = softmax(logits).cpu().detach().numpy()[0]
         elif config["spatial_backbone"] == "random_pixel":
             # Ensemble the pixel predictions
-            logits = model(torch.permute(X, (2, 0, 1)).to(DEVICE)).mean(axis=0)
-            predicted_probabilities = softmax(logits).cpu().detach().numpy()
+            model_input = torch.permute(X, (2, 0, 1)).to(DEVICE)
+            # Model input can get too large for GPU memory, so we need to split it up
+            # into chunks of size batch_size
+            model_input_chunks = torch.split(model_input, config["batch_size"], dim=0)
+            probabilities_list = []
+            for model_input_chunk in model_input_chunks:
+                logits = model(model_input_chunk)
+                predicted_probabilities = softmax(logits).cpu().detach().numpy()
+                probabilities_list.append(predicted_probabilities)
+            predicted_probabilities = np.concatenate(probabilities_list).mean(axis=0)
+
         else:
             logits = model(X.unsqueeze(0).to(DEVICE))
             predicted_probabilities = softmax(logits).cpu().detach().numpy()[0]
