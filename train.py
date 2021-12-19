@@ -53,14 +53,10 @@ arg_parser.add_argument("--save_model_threshold", type=float, default=0.8)
 arg_parser.add_argument("--pse_sample_size", type=int, default=32)
 arg_parser.add_argument("--validation_split", type=float, default=0.2)
 arg_parser.add_argument("--split_by", type=str, default="longitude", help="latitude or longitude")
-arg_parser.add_argument("--skip_bands", dest="include_bands", action="store_false")
-arg_parser.set_defaults(include_bands=True)
-arg_parser.add_argument("--skip_cloud", dest="include_cloud", action="store_false")
-arg_parser.set_defaults(include_cloud=True)
-arg_parser.add_argument("--skip_ndvi", dest="include_ndvi", action="store_false")
-arg_parser.set_defaults(include_ndvi=True)
-arg_parser.add_argument("--skip_rvi", dest="include_rvi", action="store_false")
-arg_parser.set_defaults(include_rvi=True)
+arg_parser.add_argument("--include_bands", type=bool, default=True)
+arg_parser.add_argument("--include_cloud", type=bool, default=True)
+arg_parser.add_argument("--include_ndvi", type=bool, default=False)
+arg_parser.add_argument("--include_rvi", type=bool, default=False)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 config = arg_parser.parse_args().__dict__
@@ -132,7 +128,8 @@ model = SpatiotemporalModel(
 clip_value = 1e-2
 config["clip_value"] = clip_value
 for p in model.parameters():
-    p.register_hook(lambda grad: torch.clamp(grad, -clip_value, clip_value))
+    if p.requires_grad:
+        p.register_hook(lambda grad: torch.clamp(grad, -clip_value, clip_value))
 
 print("\u2713 Model initialized")
 # ----------------------------------------------------------------------------------------------------------------------
