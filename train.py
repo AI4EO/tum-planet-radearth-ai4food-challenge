@@ -154,6 +154,7 @@ if config["enable_wandb"]:
 # Don't turn on until needed
 # wandb.watch(model, log_freq=100)
 valid_losses = []
+accuracies = []
 model_path = None
 for epoch in range(config["num_epochs"] + 1):
     train_loss = tveu.train_epoch(model, optimizer, loss_criterion, train_loader, device=DEVICE)
@@ -168,6 +169,7 @@ for epoch in range(config["num_epochs"] + 1):
     valid_loss = valid_loss.cpu().detach().numpy()[0]
     train_loss = train_loss.cpu().detach().numpy()[0]
     valid_losses.append(valid_loss)
+    accuracies.append(scores["accuracy"])
 
     scores["epoch"] = epoch
     scores["train_loss"] = train_loss
@@ -200,6 +202,7 @@ for epoch in range(config["num_epochs"] + 1):
     wandb.log(
         {
             "losses": dict(train=train_loss, valid=valid_loss, valid_min=min(valid_losses)),
+            "max_accuracy": max(accuracies),
             "epoch": epoch,
             "metrics": {
                 key: scores[key]
