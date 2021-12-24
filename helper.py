@@ -25,8 +25,9 @@ def load_reader(
     pse_sample_size: int = 64,
     min_area_to_ignore: int = 1000,
     train_or_test: str = "train",
+    alignment: str = "1to2"
 ):
-    label_file = f"data/{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
+    label_file = f"{root}/{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
     labels = gpd.read_file(label_file)
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
@@ -95,6 +96,7 @@ def load_reader(
                 include_bands=include_bands,
                 **kwargs,
             ).transform,
+            alignment=alignment
         )
     elif satellite == "planet_5day":
         reader = PlanetReader(

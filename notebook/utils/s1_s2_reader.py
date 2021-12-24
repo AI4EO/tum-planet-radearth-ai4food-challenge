@@ -22,6 +22,7 @@ class S1S2Reader(Dataset):
         min_area_to_ignore=1000,
         selected_time_points=None,
         include_cloud=False,
+        alignment="1to2"
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -31,6 +32,7 @@ class S1S2Reader(Dataset):
         :param transform: data transformer function for the augmentation or data processing
         :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a certain threshold. By default, threshold is 1000 m2
         :param selected_time_points: If a sub set of the time series will be exploited, it can determine the index of those times in a given time series dataset
+        :param alignment: [AtoB] Align sentinel_A's timeseries to sentinel_B's timeseries.
 
         :return: None
         """
@@ -41,7 +43,12 @@ class S1S2Reader(Dataset):
         with (Path(s2_input_dir) / "timestamp.pkl").open("rb") as f:
             s2_timesteps = pickle.load(f)
 
-        self.s1_aligned_index = [self.nearest_ind(s1_timesteps, d) for d in s2_timesteps]
+        if alignment == "1to2":
+            self.aligned_index = [ self.nearest_ind(s1_timesteps, d) for d in s2_timesteps ]
+        elif alignment == "2to1":
+            self.aligned_index = [ self.nearest_ind(s2_timesteps, d) for d in s1_timesteps ]
+        else:
+            raise ValueError("Please specify the alignment correctly.")
 
         self.s1_reader = S1Reader(
             input_dir=s1_input_dir,
@@ -64,6 +71,7 @@ class S1S2Reader(Dataset):
 
         assert self.s1_reader.labels.equals(self.s2_reader.labels)
         self.labels = self.s1_reader.labels
+        self.alignment = alignment
 
     @staticmethod
     def nearest_ind(items, pivot):
@@ -81,7 +89,13 @@ class S1S2Reader(Dataset):
         assert s1_label == s2_label
         assert (s1_mask == s2_mask).all()
 
-        s1_aligned = s1_image_stack[self.s1_aligned_index]
-        s1_s2_image_stack = torch.cat((s2_image_stack, s1_aligned), dim=1)
+        if self.alignment == "1to2":
+            s1_aligned = s1_image_stack[self.aligned_index]
+            s1_s2_image_stack = torch.cat((s2_image_stack, s1_aligned), dim=1)
+        elif self.alignment == '2to1':
+            s2_aligned = s2_image_stack[self.aligned_index]
+            s1_s2_image_stack = torch.cat((s2_aligned, s1_image_stack), dim=1)
+
+        assert len(s1_s2_image_stack) == len(self.aligned_index)
 
         return s1_s2_image_stack, s1_label, s1_mask, s1_fid

@@ -21,8 +21,6 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
 torch.cuda.manual_seed_all(seed)
-# torch.use_deterministic_algorithms(True)
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Parameters
@@ -39,7 +37,7 @@ arg_parser.add_argument(
     "--satellite",
     type=str,
     default="sentinel_2",
-    help="sentinel_1, sentinel_2, or planet_5day",
+    help="sentinel_1, sentinel_2, planet_5day, or s1_s2",
 )
 arg_parser.add_argument(
     "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
@@ -61,6 +59,8 @@ arg_parser.add_argument("--skip_ndvi", dest="include_ndvi", action="store_false"
 arg_parser.set_defaults(include_ndvi=True)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
+arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)")
+
 config = arg_parser.parse_args().__dict__
 
 assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2"]
@@ -80,6 +80,7 @@ kwargs = dict(
     pse_sample_size=config["pse_sample_size"],
     min_area_to_ignore=1000,
     train_or_test="train",
+    alignment=config["alignment"]
 )
 
 if config["pos"] == "both":
@@ -106,6 +107,11 @@ print("\u2713 Datasets initialized")
 data_loader = DataLoader(train_val_reader=reader, validation_split=config["validation_split"], split_by_latitude=True)
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
+
+config["train_dataset_size"] = len(train_loader.dataset)
+config["train_minibatch_size"] = len(train_loader)
+config["val_dataset_size"] = len(valid_loader.dataset)
+config["val_minibatch_size"] = len(valid_loader)
 
 print("\u2713 Data loaders initialized")
 # ----------------------------------------------------------------------------------------------------------------------
