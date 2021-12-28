@@ -16,6 +16,8 @@ from src.utils import train_valid_eval_utils as tveu
 from src.utils.baseline_models import SpatiotemporalModel
 from src.utils.data_loader import DataLoader
 
+import time
+
 seed = 42
 torch.manual_seed(seed)
 np.random.seed(seed)
@@ -60,9 +62,17 @@ arg_parser.add_argument("--include_bands", type=bool, default=True)
 arg_parser.add_argument("--include_cloud", type=bool, default=True)
 arg_parser.add_argument("--include_ndvi", type=bool, default=False)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
+arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)")
+
+
+# WandB params
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
-arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)")
+arg_parser.add_argument("--name", type=str, default=None, help="Manually the run name (e.g., snowy-owl-10); None for automatic naming.")
+arg_parser.add_argument("--unique", dest="unique", action="store_true", help="Make the name unique by appending random digits")
+arg_parser.set_defaults(unique=False)
+arg_parser.add_argument("--project", type=str, default="original", help="original, kevin")
+
 
 config = arg_parser.parse_args().__dict__
 
@@ -73,6 +83,16 @@ assert config["split_by"] in [None, "latitude", "longitude"]
 
 if config['competition'] != 'germany':
     assert config['pos'] != "33N_18E_242N"
+
+if config['project'] == 'original':
+    config['project'] = "ai4food-challenge"
+else:
+    config['project'] = "ai4food-challenge-germany"
+
+if str(config['name']) == 'None':
+    config['name'] = None
+elif config['unique']:
+    config['name'] += "_" + str(int(time.time()))[-4:]
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Data loaders
@@ -164,7 +184,8 @@ print(config)
 if config["enable_wandb"]:
     run = wandb.init(
         entity="nasa-harvest",
-        project="ai4food-challenge",
+        project=config['project'],
+        name=config['name'],
         config=config,
     )
 
