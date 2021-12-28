@@ -1,17 +1,24 @@
 import geopandas as gpd
 import pdb
 import warnings
+
+from pathlib import Path
 from shapely.errors import ShapelyDeprecationWarning
-from notebook.utils.data_transform import EOTransformer, Sentinel2Transform
-from notebook.utils.planet_reader import PlanetReader
-from notebook.utils.sentinel_1_reader import S1Reader
-from notebook.utils.sentinel_2_reader import S2Reader
-from notebook.utils.s1_s2_reader import S1S2Reader
+from src.utils.data_transform import (
+    Sentinel1Transform,
+    Sentinel2Transform,
+    PlanetTransform,
+)
+from src.utils.planet_reader import PlanetReader
+from src.utils.sentinel_1_reader import S1Reader
+from src.utils.sentinel_2_reader import S2Reader
+from src.utils.s1_s2_reader import S1S2Reader
+
 
 warnings.filterwarnings(action="ignore", category=ShapelyDeprecationWarning)
 
 competition = "ref_fusion_competition_south_africa"
-root = "data"
+root = Path(__file__).parent / "data"
 
 
 def load_reader(
@@ -22,11 +29,15 @@ def load_reader(
     include_ndvi: bool,
     image_size: int,
     spatial_backbone: str,
+    include_rvi: bool = False,
     pse_sample_size: int = 64,
     min_area_to_ignore: int = 1000,
     train_or_test: str = "train",
 ):
-    label_file = f"data/{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
+    label_file = (
+        root
+        / f"{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
+    )
     labels = gpd.read_file(label_file)
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
@@ -42,8 +53,8 @@ def load_reader(
         pse_sample_size=pse_sample_size,
         spatial_backbone=spatial_backbone,
         normalize=True,
+        is_train=train_or_test == "train",
     )
-    default_transform = EOTransformer(**kwargs).transform
 
     fill = ""
     if train_or_test == "train":
@@ -52,11 +63,16 @@ def load_reader(
     sentinel_1_tif_folder = f"{competition}_{train_or_test}_source_sentinel_1"
     sentinel_2_tif_folder = f"{competition}_{train_or_test}_source_sentinel_2"
     planet_5day_tif_folder = f"{competition}_{train_or_test}_source_planet_5day"
-    s1_input_dir = f"{root}/{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_2017"
-    s2_input_dir = f"{root}/{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_2017"
-    planet_5day_input_dir = f"{root}/{planet_5day_tif_folder}"
+    planet_daily_tif_folder = f"{competition}_{train_or_test}_source_planet"
+    s1_input_dir = str(
+        root / f"{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_2017"
+    )
+    s2_input_dir = str(root / f"{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_2017")
+    planet_5day_input_dir = str(root / f"{planet_5day_tif_folder}")
+    planet_daily_input_dir = str(root / f"{planet_daily_tif_folder}")
     if pos == "34S_19E_259N":
         planet_5day_input_dir = planet_5day_input_dir + "_259"
+        planet_daily_input_dir = planet_daily_input_dir + "_259"
 
     if satellite == "sentinel_1":
         reader = S1Reader(
@@ -64,7 +80,7 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=default_transform,
+            transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
         )
     elif satellite == "sentinel_2":
         reader = S2Reader(
@@ -88,7 +104,7 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             include_cloud=include_cloud,
-            s1_transform=default_transform,
+            s1_transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
             s2_transform=Sentinel2Transform(
                 include_cloud=include_cloud,
                 include_ndvi=include_ndvi,
@@ -102,7 +118,19 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=default_transform,
+            transform=PlanetTransform(
+                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
+            ).transform,
+        )
+    elif satellite == "planet_daily":
+        reader = PlanetReader(
+            input_dir=planet_daily_input_dir,
+            label_ids=label_ids,
+            label_dir=label_file,
+            min_area_to_ignore=min_area_to_ignore,
+            transform=PlanetTransform(
+                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
+            ).transform,
         )
 
     return label_names, reader

@@ -6,8 +6,8 @@ import torch
 from pathlib import Path
 
 from torch.utils.data import Dataset
-from notebook.utils.sentinel_1_reader import S1Reader
-from notebook.utils.sentinel_2_reader import S2Reader
+from src.utils.sentinel_1_reader import S1Reader
+from src.utils.sentinel_2_reader import S2Reader
 
 
 class S1S2Reader(Dataset):

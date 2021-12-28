@@ -16,7 +16,11 @@ class DataLoader:
     """
 
     def __init__(
-        self, train_val_reader=None, test_reader=None, validation_split=0.2, split_by_latitude=False
+        self,
+        train_val_reader=None,
+        test_reader=None,
+        validation_split=0.2,
+        split_by=None,
     ):
         """
         THIS FUNCTION INITIALIZES THE DATA LOADER.
@@ -27,10 +31,13 @@ class DataLoader:
         """
 
         if train_val_reader is not None:
-            if split_by_latitude:
-                lat = train_val_reader.labels.geometry.centroid.apply(lambda p: p.y)
-                train_indices = (lat[lat <= lat.quantile(1 - validation_split)]).index.to_list()
-                val_indices = (lat[lat > lat.quantile(1 - validation_split)]).index.to_list()
+            if split_by:
+                if split_by == "latitude":
+                    col = train_val_reader.labels.geometry.centroid.apply(lambda p: p.y)
+                elif split_by == "longitude":
+                    col = train_val_reader.labels.geometry.centroid.apply(lambda p: p.x)
+                train_indices = (col[col <= col.quantile(1 - validation_split)]).index.to_list()
+                val_indices = (col[col > col.quantile(1 - validation_split)]).index.to_list()
                 np.random.RandomState(0).shuffle(train_indices)
                 np.random.RandomState(0).shuffle(val_indices)
             else:

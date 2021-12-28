@@ -121,6 +121,10 @@ class S1Reader(Dataset):
         )
         labels = labels.loc[ignore]
         labels = labels.to_crs(crs)  # TODO: CHECK IF NECESSARY
+        labels["path"] = labels["fid"].apply(lambda fid: os.path.join(npyfolder, f"fid_{fid}.npz"))
+        labels["exists"] = labels.path.apply(os.path.exists)
+        if labels["exists"].all():
+            return labels
 
         vv = np.load(os.path.join(rootpath, "vv.npy"))
         vh = np.load(os.path.join(rootpath, "vh.npy"))
