@@ -17,11 +17,11 @@ from src.utils.s1_s2_reader import S1S2Reader
 
 warnings.filterwarnings(action="ignore", category=ShapelyDeprecationWarning)
 
-competition = "ref_fusion_competition_south_africa"
-root = Path(__file__).parent / "data"
-
+ivan_data_root = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/data"
+kevin_data_root = "/cmlscratch/hkjoo/data/germany"
 
 def load_reader(
+    competition: str,
     satellite: str,
     pos: str,
     include_bands: bool,
@@ -33,11 +33,20 @@ def load_reader(
     pse_sample_size: int = 64,
     min_area_to_ignore: int = 1000,
     train_or_test: str = "train",
+    alignment: str = "1to2"
 ):
-    label_file = (
-        root
-        / f"{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
-    )
+    if competition == "south_africa":
+        country = "ref_fusion_competition_south_africa"
+        root = ivan_data_root
+        year = '2017'
+    elif competition == "germany":
+        country = "dlr_fusion_competition_germany"
+        root = kevin_data_root
+        year = '2018'
+    else:
+        raise NameError("Please respecify competition correctly.")
+
+    label_file = f"{root}/{country}_{train_or_test}_labels/{country}_{train_or_test}_labels_{pos}/labels.geojson"
     labels = gpd.read_file(label_file)
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
@@ -57,19 +66,19 @@ def load_reader(
     )
 
     fill = ""
-    if train_or_test == "train":
+
+    if train_or_test == "train" and competition == 'south_africa':
         fill = f"_{pos}"
 
-    sentinel_1_tif_folder = f"{competition}_{train_or_test}_source_sentinel_1"
-    sentinel_2_tif_folder = f"{competition}_{train_or_test}_source_sentinel_2"
-    planet_5day_tif_folder = f"{competition}_{train_or_test}_source_planet_5day"
-    planet_daily_tif_folder = f"{competition}_{train_or_test}_source_planet"
-    s1_input_dir = str(
-        root / f"{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_2017"
-    )
-    s2_input_dir = str(root / f"{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_2017")
-    planet_5day_input_dir = str(root / f"{planet_5day_tif_folder}")
-    planet_daily_input_dir = str(root / f"{planet_daily_tif_folder}")
+    sentinel_1_tif_folder = f"{country}_{train_or_test}_source_sentinel_1"
+    sentinel_2_tif_folder = f"{country}_{train_or_test}_source_sentinel_2"
+    planet_5day_tif_folder = f"{country}_{train_or_test}_source_planet_5day"
+    planet_daily_tif_folder = f"{country}_{train_or_test}_source_planet"
+    s1_input_dir = f"{root}/{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_{year}"
+    s2_input_dir = f"{root}/{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_{year}"
+    planet_5day_input_dir = f"{root}/{planet_5day_tif_folder}"
+    planet_daily_input_dir = f"{root}/{planet_daily_tif_folder}"
+    
     if pos == "34S_19E_259N":
         planet_5day_input_dir = planet_5day_input_dir + "_259"
         planet_daily_input_dir = planet_daily_input_dir + "_259"
@@ -111,6 +120,7 @@ def load_reader(
                 include_bands=include_bands,
                 **kwargs,
             ).transform,
+            alignment=alignment
         )
     elif satellite == "planet_5day":
         reader = PlanetReader(

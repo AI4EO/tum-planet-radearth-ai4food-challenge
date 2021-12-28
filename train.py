@@ -21,16 +21,19 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
 torch.cuda.manual_seed_all(seed)
-# torch.use_deterministic_algorithms(True)
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Parameters
 # ----------------------------------------------------------------------------------------------------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-competition = "ref_fusion_competition_south_africa"
+
 arg_parser = ArgumentParser()
-arg_parser.add_argument("--competition", type=str, default=competition)
+arg_parser.add_argument(
+    "--competition", 
+    type=str, 
+    default="germany",
+    help="germany, south_africa"
+)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
 arg_parser.add_argument("--num_epochs", type=int, default=40)
@@ -38,10 +41,10 @@ arg_parser.add_argument(
     "--satellite",
     type=str,
     default="sentinel_2",
-    help="sentinel_1, sentinel_2, or planet_5day",
+    help="sentinel_1, sentinel_2, planet_5day, or s1_s2",
 )
 arg_parser.add_argument(
-    "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
+    "--pos", type=str, default="both_34", help="both_34, 34S_19E_258N, 34S_19E_259N, 33N_18E_242N"
 )
 arg_parser.add_argument("--lr", type=float, default=0.001)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
@@ -59,16 +62,24 @@ arg_parser.add_argument("--include_ndvi", type=bool, default=False)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
+arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)")
+
 config = arg_parser.parse_args().__dict__
 
 assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2", "planet_daily"]
-assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
+assert config["pos"] in ["both_34", "34S_19E_258N", "34S_19E_259N", "33N_18E_242N"]
+assert config["competition"] in ["germany", "south_africa"]
 assert config["split_by"] in [None, "latitude", "longitude"]
+
+if config['competition'] != 'germany':
+    assert config['pos'] != "33N_18E_242N"
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Data loaders
 # ---------------------------------------------------------------------------------------------------------------------
 # Initialize data loaders
 kwargs = dict(
+    competition=config["competition"],
     satellite=config["satellite"],
     include_bands=config["include_bands"],
     include_cloud=config["include_cloud"],
@@ -79,9 +90,10 @@ kwargs = dict(
     pse_sample_size=config["pse_sample_size"],
     min_area_to_ignore=1000,
     train_or_test="train",
+    alignment=config["alignment"]
 )
 
-if config["pos"] == "both":
+if config["pos"] == "both_34":
     label_names_258, reader_258 = load_reader(pos="34S_19E_258N", **kwargs)
     print("\u2713 Loaded 258")
     label_names_259, reader_259 = load_reader(pos="34S_19E_259N", **kwargs)
@@ -110,6 +122,11 @@ data_loader = DataLoader(
 )
 train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
 valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
+
+config["train_dataset_size"] = len(train_loader.dataset)
+config["train_minibatch_size"] = len(train_loader)
+config["val_dataset_size"] = len(valid_loader.dataset)
+config["val_minibatch_size"] = len(valid_loader)
 
 print("\u2713 Data loaders initialized")
 # ----------------------------------------------------------------------------------------------------------------------
