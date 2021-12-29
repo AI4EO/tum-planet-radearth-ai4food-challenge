@@ -118,6 +118,8 @@ if config["pos"] == "both_34":
     print("\u2713 Loaded 258")
     label_names_259, reader_259 = load_reader(pos="34S_19E_259N", **kwargs)
     print("\u2713 Loaded 259")
+    reader_258.labels.reset_index(inplace=True)
+    reader_259.labels.reset_index(inplace=True)
     assert (
         label_names_258 == label_names_259
     ), f"{label_names_258} and {label_names_259} are not equal"
@@ -126,6 +128,7 @@ if config["pos"] == "both_34":
     reader.labels = pd.concat([reader_258.labels, reader_259.labels], ignore_index=True)
 else:
     label_names, reader = load_reader(pos=config["pos"], **kwargs)
+    reader.labels.reset_index(inplace=True)
 
 config["num_classes"] = len(label_names)
 config["classes"] = label_names
