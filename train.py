@@ -168,7 +168,7 @@ model = SpatiotemporalModel(
 clip_value = 1e-2
 config["clip_value"] = clip_value
 for p in model.parameters():
-    if p.requires_grad:
+    if p.requires_grad and config['competition'] == 'south_africa':
         p.register_hook(lambda grad: torch.clamp(grad, -clip_value, clip_value))
 
 print("\u2713 Model initialized")
