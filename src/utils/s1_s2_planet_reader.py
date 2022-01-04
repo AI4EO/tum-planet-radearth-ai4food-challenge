@@ -32,13 +32,22 @@ class S1S2PlanetReader(Dataset):
         THIS FUNCTION INITIALIZES DATA READER.
         :param input_dir: directory of input images in zip format
         :param label_dir: directory of ground-truth polygons in GeoJSON format
-        :param label_ids: an array of crop IDs in order. if the crop labels in GeoJSON data is not started from index 0 it can be used. Otherwise it is not required.
+        :param label_ids: an array of crop IDs in order. if the crop labels in GeoJSON data is not
+            started from index 0 it can be used. Otherwise it is not required.
         :param transform: data transformer function for the augmentation or data processing
-        :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a certain threshold. By default, threshold is 1000 m2
-        :param selected_time_points: If a sub set of the time series will be exploited, it can determine the index of those times in a given time series dataset
+        :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a
+            certain threshold. By default, threshold is 1000 m2
+        :param selected_time_points: If a sub set of the time series will be exploited, it can
+            determine the index of those times in a given time series dataset
 
         :return: None
         """
+
+        print(
+            "WARNING: If using the pixelsetencoder or random pixel spatial encoding the pixels from"
+            " each image (S1, S2, planet daily) are not aligned. "
+            "This is deliberate to avoid interpolation and code changes."
+        )
 
         with (Path(s1_input_dir) / "timestamp.pkl").open("rb") as f:
             s1_timesteps = pickle.load(f)
