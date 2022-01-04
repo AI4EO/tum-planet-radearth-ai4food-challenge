@@ -38,7 +38,7 @@ arg_parser.add_argument(
     "--satellite",
     type=str,
     default="sentinel_2",
-    help="sentinel_1, sentinel_2, or planet_5day",
+    help="sentinel_1, sentinel_2, or planet_5day, s1_s2, planet_daily, s1_s2_planet_daily",
 )
 arg_parser.add_argument(
     "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
@@ -61,7 +61,7 @@ arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_fa
 arg_parser.set_defaults(enable_wandb=True)
 config = arg_parser.parse_args().__dict__
 
-assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2", "planet_daily"]
+assert config["satellite"] in ["sentinel_1", "sentinel_2", "planet_5day", "s1_s2", "planet_daily", "s1_s2_planet_daily"]
 assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
 assert config["split_by"] in [None, "latitude", "longitude"]
 # ---------------------------------------------------------------------------------------------------------------------

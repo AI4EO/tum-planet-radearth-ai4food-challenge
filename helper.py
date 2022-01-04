@@ -10,6 +10,7 @@ from src.utils.data_transform import (
     PlanetTransform,
 )
 from src.utils.planet_reader import PlanetReader
+from src.utils.s1_s2_planet_reader import S1S2PlanetReader
 from src.utils.sentinel_1_reader import S1Reader
 from src.utils.sentinel_2_reader import S2Reader
 from src.utils.s1_s2_reader import S1S2Reader
@@ -129,6 +130,25 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             transform=PlanetTransform(
+                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
+            ).transform,
+        )
+    elif satellite == "s1_s2_planet_daily":
+        reader = S1S2PlanetReader(
+            s1_input_dir=s1_input_dir,
+            s2_input_dir=s2_input_dir,
+            planet_input_dir=planet_daily_input_dir,
+            label_ids=label_ids,
+            label_dir=label_file,
+            min_area_to_ignore=min_area_to_ignore,
+            s1_transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
+            s2_transform=Sentinel2Transform(
+                include_cloud=include_cloud,
+                include_ndvi=include_ndvi,
+                include_bands=include_bands,
+                **kwargs,
+            ).transform,
+            planet_transform=PlanetTransform(
                 include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
             ).transform,
         )
