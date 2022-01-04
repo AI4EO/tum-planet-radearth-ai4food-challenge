@@ -214,27 +214,28 @@ for epoch in range(config["num_epochs"] + 1):
     if not config["enable_wandb"]:
         continue
 
+    metrics = {
+        key: scores[key]
+        for key in [
+            "accuracy",
+            "kappa",
+            "f1_micro",
+            "f1_macro",
+            "f1_weighted",
+            "recall_micro",
+            "recall_macro",
+            "recall_weighted",
+            "precision_micro",
+            "precision_macro",
+            "precision_weighted",
+        ]
+    }
+    metrics["max_accuracy"] = max(accuracies)
     wandb.log(
         {
             "losses": dict(train=train_loss, valid=valid_loss, valid_min=min(valid_losses)),
-            "max_accuracy": max(accuracies),
             "epoch": epoch,
-            "metrics": {
-                key: scores[key]
-                for key in [
-                    "accuracy",
-                    "kappa",
-                    "f1_micro",
-                    "f1_macro",
-                    "f1_weighted",
-                    "recall_micro",
-                    "recall_macro",
-                    "recall_weighted",
-                    "precision_micro",
-                    "precision_macro",
-                    "precision_weighted",
-                ]
-            },
+            "metrics": metrics,
             "confusion_matrix": tveu.confusion_matrix_figure(cm, labels=label_names),
         }
     )
