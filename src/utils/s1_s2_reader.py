@@ -41,6 +41,8 @@ class S1S2Reader(Dataset):
         with (Path(s2_input_dir) / "timestamp.pkl").open("rb") as f:
             s2_timesteps = pickle.load(f)
 
+        self.timesteps = s2_timesteps
+
         self.s1_aligned_index = [self.nearest_ind(s1_timesteps, d) for d in s2_timesteps]
 
         self.s1_reader = S1Reader(
@@ -62,7 +64,9 @@ class S1S2Reader(Dataset):
             include_cloud=include_cloud,
         )
 
-        assert self.s1_reader.labels.equals(self.s2_reader.labels)
+        assert self.s1_reader.labels.drop("path", axis=1).equals(
+            self.s2_reader.labels.drop("path", axis=1)
+        )
         self.labels = self.s1_reader.labels
 
     @staticmethod
