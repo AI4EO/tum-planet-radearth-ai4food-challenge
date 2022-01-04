@@ -164,6 +164,7 @@ if config["enable_wandb"]:
         entity="nasa-harvest",
         project="ai4food-challenge",
         config=config,
+        settings=wandb.Settings(start_method="fork"),
     )
 
 # Don't turn on until needed
