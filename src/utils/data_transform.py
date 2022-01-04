@@ -36,7 +36,19 @@ class EOTransformer:
         self.pse_sample_size = pse_sample_size
         self.is_train = is_train
 
-    def transform(self, image_stack, mask=None):
+    def normalize_and_torchify(self, image_stack, mask=None):
+        image_stack = image_stack * 1e-4
+
+        # z-normalize
+        if self.normalize:
+            image_stack -= 0.1014 + np.random.normal(scale=0.01)
+            image_stack /= 0.1171 + np.random.normal(scale=0.01)
+
+        return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(
+            np.ascontiguousarray(mask)
+        )
+
+    def transform(self, image_stack, mask=None, return_unnormalized_numpy=False):
         """
         THIS FUNCTION INITIALIZES THE DATA TRANSFORMER.
         :param image_stack: If it is spatial data, it is in size [Time Stamp, Image Dimension (Channel), Height, Width],
@@ -90,16 +102,10 @@ class EOTransformer:
             #     image_stack = np.fliplr(image_stack)
             #     mask = np.fliplr(mask)
 
-        image_stack = image_stack * 1e-4
+        if return_unnormalized_numpy:
+            return image_stack, mask
 
-        # z-normalize
-        if self.normalize:
-            image_stack -= 0.1014 + np.random.normal(scale=0.01)
-            image_stack /= 0.1171 + np.random.normal(scale=0.01)
-
-        return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(
-            np.ascontiguousarray(mask)
-        )
+        return self.normalize_and_torchify(image_stack, mask)
 
 
 class PlanetTransform(EOTransformer):
@@ -119,6 +125,8 @@ class PlanetTransform(EOTransformer):
 
     def transform(self, image_stack, mask=None):
 
+        image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=True)
+
         if self.include_ndvi:
             red = image_stack[:, 2]
             nir = image_stack[:, 3]
@@ -132,7 +140,7 @@ class PlanetTransform(EOTransformer):
         elif not self.include_bands and self.include_ndvi:
             image_stack = ndvi
 
-        return super().transform(image_stack, mask)
+        return self.normalize_and_torchify(image_stack, mask)
 
 
 class Sentinel1Transform(EOTransformer):
@@ -152,6 +160,8 @@ class Sentinel1Transform(EOTransformer):
 
     def transform(self, image_stack, mask=None):
 
+        image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=True)
+
         if self.include_rvi:
             VV = image_stack[:, 0]
             VH = image_stack[:, 1]
@@ -165,7 +175,7 @@ class Sentinel1Transform(EOTransformer):
         elif not self.include_bands and self.include_rvi:
             image_stack = radar_vegetation_index
 
-        return super().transform(image_stack, mask)
+        return self.normalize_and_torchify(image_stack, mask)
 
 
 class Sentinel2Transform(EOTransformer):
@@ -186,6 +196,8 @@ class Sentinel2Transform(EOTransformer):
         self.include_ndvi = include_ndvi
 
     def transform(self, image_stack, mask=None):
+
+        image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=True)
 
         if self.include_ndvi:
             nir = image_stack[:, 7]
@@ -208,7 +220,7 @@ class Sentinel2Transform(EOTransformer):
         elif not self.include_bands and not self.include_cloud and self.include_ndvi:
             image_stack = ndvi
 
-        return super().transform(image_stack, mask)
+        return self.normalize_and_torchify(image_stack, mask)
 
 
 def random_crop(image_stack, mask, image_size):
