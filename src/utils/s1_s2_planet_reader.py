@@ -112,16 +112,11 @@ class S1S2PlanetReader(Dataset):
         s2_image_stack, s2_label, s2_mask, s2_fid = self.s2_reader[idx]
         planet_image_stack, planet_label, planet_mask, planet_fid = self.planet_reader[idx]
 
-        assert s1_fid == s2_fid
-        assert s1_label == s2_label
-        assert (s1_mask == s2_mask).all()
-        assert s1_fid == planet_fid
-        assert s1_label == planet_label
-        assert (s1_mask == planet_mask).all()
+        assert s1_fid == s2_fid == planet_fid
+        assert s1_label == s2_label == planet_label
 
         s1_aligned = s1_image_stack[self.s1_aligned_index]
         s2_aligned = s2_image_stack[self.s2_aligned_index]
-
         s1_s2_planet_image_stack = torch.cat((planet_image_stack, s2_aligned, s1_aligned), dim=1)
 
-        return s1_s2_planet_image_stack, s1_label, s1_mask, s1_fid
+        return s1_s2_planet_image_stack, planet_label, planet_mask, planet_fid

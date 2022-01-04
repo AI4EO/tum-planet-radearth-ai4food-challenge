@@ -91,15 +91,16 @@ class S1S2Reader(Dataset):
 
         assert s1_fid == s2_fid
         assert s1_label == s2_label
-        assert (s1_mask == s2_mask).all()
 
         if self.alignment == "1to2":
             s1_aligned = s1_image_stack[self.aligned_index]
             s1_s2_image_stack = torch.cat((s2_image_stack, s1_aligned), dim=1)
+            s1_s2_mask = s2_mask
         elif self.alignment == "2to1":
             s2_aligned = s2_image_stack[self.aligned_index]
             s1_s2_image_stack = torch.cat((s2_aligned, s1_image_stack), dim=1)
+            s1_s2_mask = s1_mask
 
         assert len(s1_s2_image_stack) == len(self.aligned_index)
 
-        return s1_s2_image_stack, s1_label, s1_mask, s1_fid
+        return s1_s2_image_stack, s1_label, s1_s2_mask, s1_fid
