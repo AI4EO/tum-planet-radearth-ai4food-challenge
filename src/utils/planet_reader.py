@@ -12,6 +12,7 @@ import numpy as np
 import os
 import zipfile
 import glob
+import pdb
 from tqdm import tqdm
 
 
@@ -100,10 +101,14 @@ class PlanetReader(torch.utils.data.Dataset):
         :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a certain threshold. By default, threshold is 1000 m2
         :return: labels of the saved fields
         """
-
-        inputs = glob.glob(input_dir + "/*/*.tif", recursive=True)
-        tifs = sorted(inputs)
         labels = gpd.read_file(label_dir)
+        labels["path"] = labels["fid"].apply(lambda fid: os.path.join(npyfolder, f"fid_{fid}.npz"))
+        labels["exists"] = labels.path.apply(os.path.exists)
+        if labels["exists"].all():
+            return labels
+
+        inputs = glob.glob(input_dir + "/*/*sr.tif", recursive=True)
+        tifs = sorted(inputs)
 
         # read coordinate system of tifs and project labels to the same coordinate reference system (crs)
         with rio.open(tifs[0]) as image:
@@ -123,8 +128,7 @@ class PlanetReader(torch.utils.data.Dataset):
             labels.iterrows(), total=len(labels), position=0, leave=True
         ):  # , desc="INFO: Extracting time series into the folder: {}".format(npyfolder)):
 
-            npyfile = os.path.join(npyfolder, "fid_{}.npz".format(feature.fid))
-            if os.path.exists(npyfile):
+            if os.path.exists(feature.path):
                 continue
 
             left, bottom, right, top = feature.geometry.bounds
@@ -157,7 +161,7 @@ class PlanetReader(torch.utils.data.Dataset):
             # mask[mask == feature.fid] = 1
             os.makedirs(npyfolder, exist_ok=True)
             np.savez(
-                npyfile,
+                feature.path,
                 image_stack=image_stack,
                 mask=mask,
                 feature=feature.drop("geometry").to_dict(),

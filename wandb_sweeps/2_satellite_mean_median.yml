@@ -1,0 +1,16 @@
+program: train.py
+method: random
+metric:
+  goal: minimize
+  name: losses.valid
+parameters:
+  spatial_backbone:
+    values: ["mean_pixel", "median_pixel"]
+  num_epochs:
+    value: 100
+  batch_size:
+    values: [32, 64, 128]
+  satellite:
+    values: ["sentinel_2", "s1_s2", "planet_daily", "planet_5day"]
+  lr:
+    values: [0.001, 0.0001, 0.00001]

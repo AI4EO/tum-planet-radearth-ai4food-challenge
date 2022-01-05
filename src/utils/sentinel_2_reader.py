@@ -130,6 +130,10 @@ class S2Reader(Dataset):
         )
         labels = labels.loc[ignore]
         labels = labels.to_crs(crs)  # TODO: CHECK IF NECESSARY
+        labels["path"] = labels["fid"].apply(lambda fid: os.path.join(npyfolder, f"fid_{fid}.npz"))
+        labels["exists"] = labels.path.apply(os.path.exists)
+        if labels["exists"].all():
+            return labels
 
         bands = np.load(os.path.join(rootpath, "bands.npy"))
         clp = np.load(os.path.join(rootpath, "clp.npy"))  # CLOUD PROBABILITY
