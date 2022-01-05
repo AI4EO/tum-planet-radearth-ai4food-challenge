@@ -42,7 +42,10 @@ def load_reader(
     elif competition == "germany":
         country = "dlr_fusion_competition_germany"
         root = kevin_data_root
-        year = '2018'
+        if train_or_test == 'train':
+            year = '2018'
+        else:
+            year = '2019'
     else:
         raise NameError("Please respecify competition correctly.")
 
