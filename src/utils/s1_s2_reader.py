@@ -71,9 +71,7 @@ class S1S2Reader(Dataset):
             include_cloud=include_cloud,
         )
 
-        assert self.s1_reader.labels.drop("path", axis=1).equals(
-            self.s2_reader.labels.drop("path", axis=1)
-        )
+        # assert self.s1_reader.labels.equals(self.s2_reader.labels)
         self.labels = self.s1_reader.labels
         self.alignment = alignment
 
