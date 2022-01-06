@@ -55,6 +55,10 @@ arg_parser.add_argument("--include_bands", type=bool, default=True)
 arg_parser.add_argument("--include_cloud", type=bool, default=True)
 arg_parser.add_argument("--include_ndvi", type=bool, default=True)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
+arg_parser.add_argument("--s1_temporal_dropout", type=float, default=0.2)
+arg_parser.add_argument("--s2_temporal_dropout", type=float, default=0.2)
+arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.2)
+
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 arg_parser.add_argument(
@@ -89,6 +93,9 @@ kwargs = dict(
     min_area_to_ignore=1000,
     train_or_test="train",
     alignment=config["alignment"],
+    s1_temporal_dropout=config["s1_temporal_dropout"],
+    s2_temporal_dropout=config["s2_temporal_dropout"],
+    planet_temporal_dropout=config["planet_temporal_dropout"],
 )
 
 if config["pos"] == "both":
@@ -232,9 +239,15 @@ for epoch in range(config["num_epochs"] + 1):
         ]
     }
     metrics["max_accuracy"] = max(accuracies)
+    closeness = np.abs(valid_loss - train_loss) + valid_loss
     wandb.log(
         {
-            "losses": dict(train=train_loss, valid=valid_loss, valid_min=min(valid_losses)),
+            "losses": dict(
+                train=train_loss,
+                valid=valid_loss,
+                valid_min=min(valid_losses),
+                train_val_closeness=closeness,
+            ),
             "epoch": epoch,
             "metrics": metrics,
             "confusion_matrix": tveu.confusion_matrix_figure(cm, labels=label_names),
