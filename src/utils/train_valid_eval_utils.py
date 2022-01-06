@@ -99,6 +99,7 @@ def train_epoch(model, optimizer, criterion, dataloader, device="cpu"):
         for idx, batch in iterator:
             optimizer.zero_grad()
             x, y_true, mask, _ = batch
+            assert np.argwhere(np.isnan(x)).numpy().size == 0 and np.argwhere(np.isinf(x)).numpy().size == 0
             model_input = (x.to(device), mask.to(device))
             loss = criterion(model.forward(model_input), y_true.to(device))
             loss.backward()

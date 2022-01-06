@@ -23,6 +23,7 @@ class S1S2Reader(Dataset):
         selected_time_points=None,
         include_cloud=False,
         alignment="1to2",
+        filter=None
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -59,6 +60,7 @@ class S1S2Reader(Dataset):
             transform=s1_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
+            filter=filter
         )
 
         self.s2_reader = S2Reader(
@@ -69,12 +71,14 @@ class S1S2Reader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
+            filter=filter
         )
 
-        # assert self.s1_reader.labels.equals(self.s2_reader.labels)
         self.labels = self.s1_reader.labels
         self.alignment = alignment
 
+        assert len(self.s1_reader.labels) == len(self.s2_reader.labels)
+        
     @staticmethod
     def nearest_ind(items, pivot):
         time_diff = np.abs([date - pivot for date in items])

@@ -31,6 +31,7 @@ class S1Reader(Dataset):
         transform=None,
         min_area_to_ignore=1000,
         selected_time_points=None,
+        filter=None
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -51,7 +52,7 @@ class S1Reader(Dataset):
             self.crop_ids = label_ids.tolist()
 
         self.npyfolder = input_dir.replace(".zip", "/time_series")
-        self.labels = S1Reader._setup(input_dir, label_dir, self.npyfolder, min_area_to_ignore)
+        self.labels = S1Reader._setup(input_dir, label_dir, self.npyfolder, min_area_to_ignore, filter)
 
     def __len__(self):
         """
@@ -81,6 +82,7 @@ class S1Reader(Dataset):
             raise
 
         if self.data_transform is not None:
+            assert np.argwhere(np.isnan(image_stack)).size == 0 and np.argwhere(np.isinf(image_stack)).size == 0
             image_stack, mask = self.data_transform(image_stack, mask)
 
         if self.selected_time_points is not None:
@@ -94,7 +96,7 @@ class S1Reader(Dataset):
         return image_stack, label, mask, feature.fid
 
     @staticmethod
-    def _setup(rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000):
+    def _setup(rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000, filter=None):
         """
         THIS FUNCTION PREPARES THE PLANET READER BY SPLITTING AND RASTERIZING EACH CROP FIELD AND SAVING INTO SEPERATE FILES FOR SPEED UP THE FURTHER USE OF DATA.
 
@@ -114,6 +116,9 @@ class S1Reader(Dataset):
             minx, miny, maxx, maxy = bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y
 
         labels = gpd.read_file(labelgeojson)
+        if filter is not None:
+            labels = labels[~labels.fid.isin(filter)]
+
         # project to same coordinate reference system (crs) as the imagery
         ignore = labels.geometry.area > min_area_to_ignore
         print(

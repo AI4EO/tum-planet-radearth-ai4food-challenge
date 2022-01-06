@@ -1,0 +1,26 @@
+program: train.py
+method: grid
+metric:
+  goal: minimize
+  name: losses.valid
+parameters:
+  competition:
+    value: germany
+  satellite:
+    values: [s1_s2, sentinel_1, sentinel_2]
+  pos:
+    value: 33N_18E_242N
+  spatial_backbone:
+    values: [mean_pixel, pixelsetencoder]
+  pse_sample_size:
+    values: [8, 16, 32]
+  temporal_backbone:
+    values: [LSTM, ltae]
+  num_epochs:
+    value: 75
+  batch_size:
+    values: [32, 64, 128]
+  lr:
+    values: [0.01, 0.001, 0.0001]
+  project:
+    value: kevin

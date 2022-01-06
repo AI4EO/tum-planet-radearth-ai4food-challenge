@@ -57,6 +57,7 @@ class EOTransformer:
         :return: image_stack, mask
         """
         assert (mask > 0).any(), "mask all 0s"
+
         if (
             self.spatial_backbone == "mean_pixel" or self.spatial_backbone == "none"
         ):  # average over field mask: T, D = image_stack.shape
@@ -206,10 +207,6 @@ class Sentinel2Transform(EOTransformer):
             ndvi[nir == red] = 0
             assert np.isnan(ndvi).sum() == 0, "NDVI contains NaN"
             ndvi = ndvi[:, np.newaxis]
-
-        # import pdb
-
-        # pdb.set_trace()
 
         if self.include_bands and self.include_cloud and self.include_ndvi:
             image_stack = np.concatenate((image_stack, ndvi), axis=1)

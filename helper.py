@@ -19,7 +19,7 @@ from src.utils.s1_s2_reader import S1S2Reader
 warnings.filterwarnings(action="ignore", category=ShapelyDeprecationWarning)
 
 ivan_data_root = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/data"
-kevin_data_root = "/cmlscratch/hkjoo/data/germany"
+kevin_data_root = "/cmlscratch/hkjoo/repo/ai4eo/data"
 
 def load_reader(
     competition: str,
@@ -52,6 +52,13 @@ def load_reader(
 
     label_file = f"{root}/{country}_{train_or_test}_labels/{country}_{train_or_test}_labels_{pos}/labels.geojson"
     labels = gpd.read_file(label_file)
+
+    if competition == 'germany':
+        with Path("src/s1g_redflag.txt").open('r') as f:
+            sentinel_1_redflags = f.readlines()
+            sentinel_1_redflags = [int(f) for f in "".join(sentinel_1_redflags).split('\n')]
+            labels = labels[~labels.fid.isin(sentinel_1_redflags)]
+
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
 
@@ -94,6 +101,7 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
         )
     elif satellite == "sentinel_2":
         reader = S2Reader(
@@ -108,6 +116,7 @@ def load_reader(
                 include_bands=include_bands,
                 **kwargs,
             ).transform,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
         )
     elif satellite == "s1_s2":
         reader = S1S2Reader(
@@ -125,6 +134,7 @@ def load_reader(
                 **kwargs,
             ).transform,
             alignment=alignment,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
         )
     elif satellite == "planet_5day":
         reader = PlanetReader(
@@ -164,6 +174,7 @@ def load_reader(
             planet_transform=PlanetTransform(
                 include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
             ).transform,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
         )
-
+        
     return label_names, reader

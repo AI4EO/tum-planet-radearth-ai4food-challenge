@@ -27,6 +27,7 @@ class S1S2PlanetReader(Dataset):
         min_area_to_ignore=1000,
         selected_time_points=None,
         include_cloud=False,
+        filter=None,
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -76,6 +77,7 @@ class S1S2PlanetReader(Dataset):
             transform=s1_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
+            filter=filter
         )
 
         self.s2_reader = S2Reader(
@@ -86,6 +88,7 @@ class S1S2PlanetReader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
+            filter=filter
         )
 
         self.planet_reader = PlanetReader(
@@ -107,6 +110,8 @@ class S1S2PlanetReader(Dataset):
             self.planet_reader.labels.drop("path", axis=1)
         )
         self.labels = self.s1_reader.labels.drop("path", axis=1)
+        
+        assert len(self.s1_reader.labels) == len(self.s2_reader.labels)
 
     @staticmethod
     def nearest_ind(items, pivot):
@@ -117,8 +122,8 @@ class S1S2PlanetReader(Dataset):
         return len(self.s1_reader.labels)
 
     def __getitem__(self, idx):
-        s1_image_stack, s1_label, s1_mask, s1_fid = self.s1_reader[idx]
-        s2_image_stack, s2_label, s2_mask, s2_fid = self.s2_reader[idx]
+        s1_image_stack, s1_label, _, s1_fid = self.s1_reader[idx]
+        s2_image_stack, s2_label, _, s2_fid = self.s2_reader[idx]
         planet_image_stack, planet_label, planet_mask, planet_fid = self.planet_reader[idx]
 
         assert s1_fid == s2_fid == planet_fid

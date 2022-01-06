@@ -33,7 +33,7 @@ arg_parser = ArgumentParser()
 arg_parser.add_argument(
     "--competition", 
     type=str, 
-    default="germany",
+    default="south_africa",
     help="germany, south_africa"
 )
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
@@ -62,7 +62,7 @@ arg_parser.add_argument("--include_bands", type=bool, default=True)
 arg_parser.add_argument("--include_cloud", type=bool, default=True)
 arg_parser.add_argument("--include_ndvi", type=bool, default=True)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
-arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)")
+arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41 for SA, 144 vs. 122)")
 
 # WandB params
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
@@ -86,8 +86,10 @@ assert config["pos"] in ["both_34", "34S_19E_258N", "34S_19E_259N", "33N_18E_242
 assert config["competition"] in ["germany", "south_africa"]
 assert config["split_by"] in [None, "latitude", "longitude"]
 
-if config['competition'] != 'germany':
-    assert config['pos'] != "33N_18E_242N"
+if config['competition'] == 'germany':
+    assert config['pos'] == "33N_18E_242N"
+elif config['competition'] == 'south_africa':
+    assert config['pos'] in ['both_34', '34S_19E_258N', '34S_19E_259N']
 
 if config['project'] == 'original':
     config['project'] = "ai4food-challenge"
@@ -173,7 +175,7 @@ model = SpatiotemporalModel(
 clip_value = 1e-2
 config["clip_value"] = clip_value
 for p in model.parameters():
-    if p.requires_grad and config['competition'] == 'south_africa':
+    if p.requires_grad:
         p.register_hook(lambda grad: torch.clamp(grad, -clip_value, clip_value))
 
 print("\u2713 Model initialized")

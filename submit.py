@@ -108,7 +108,6 @@ submission_path = Path(f"submissions/{name}/{pos}-submission-{name}.json")
 submission_path.parent.mkdir(parents=True, exist_ok=True)
 output_frame.to_json(submission_path)
 
-import ipdb; ipdb.set_trace()
 print(f"Saving: {name}.tar.gz ")
 
 os.system(f"cd submissions && tar czf {name}.tar.gz {name}")
