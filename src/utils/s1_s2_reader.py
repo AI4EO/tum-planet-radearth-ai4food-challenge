@@ -47,6 +47,7 @@ class S1S2Reader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             temporal_dropout=s1_temporal_dropout,
+            return_timesteps=True,
         )
 
         self.s2_reader = S2Reader(
@@ -58,6 +59,7 @@ class S1S2Reader(Dataset):
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
             temporal_dropout=s2_temporal_dropout,
+            return_timesteps=True,
         )
 
         if alignment == "1to2":
