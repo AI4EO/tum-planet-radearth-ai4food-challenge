@@ -121,7 +121,7 @@ class EOTransformer:
 
             synthetic_image_stack = np.zeros(image_stack.shape)
             # Go through pixel
-            for i in image_stack.shape[2]:
+            for i in range(image_stack.shape[2]):
                 synthetic_image_stack[:, :, i] = self.temporal_augmentation_model(
                     image_stack[:, :, i]
                 )
