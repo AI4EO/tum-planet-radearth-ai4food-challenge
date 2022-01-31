@@ -156,6 +156,5 @@ def load_reader(
             s2_temporal_dropout=s2_temporal_dropout,
             planet_temporal_dropout=planet_temporal_dropout,
         )
-        reader[0]
 
     return label_names, reader
