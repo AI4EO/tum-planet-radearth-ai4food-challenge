@@ -23,6 +23,8 @@ class S1S2Reader(Dataset):
         selected_time_points=None,
         include_cloud=False,
         alignment="1to2",
+        s1_temporal_dropout=0.0,
+        s2_temporal_dropout=0.0,
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -37,21 +39,6 @@ class S1S2Reader(Dataset):
         :return: None
         """
 
-        with (Path(s1_input_dir) / "timestamp.pkl").open("rb") as f:
-            s1_timesteps = pickle.load(f)
-
-        with (Path(s2_input_dir) / "timestamp.pkl").open("rb") as f:
-            s2_timesteps = pickle.load(f)
-
-        if alignment == "1to2":
-            self.aligned_index = [self.nearest_ind(s1_timesteps, d) for d in s2_timesteps]
-            self.timesteps = s2_timesteps
-        elif alignment == "2to1":
-            self.aligned_index = [self.nearest_ind(s2_timesteps, d) for d in s1_timesteps]
-            self.timesteps = s1_timesteps
-        else:
-            raise ValueError("Please specify the alignment correctly.")
-
         self.s1_reader = S1Reader(
             input_dir=s1_input_dir,
             label_dir=label_dir,
@@ -59,6 +46,8 @@ class S1S2Reader(Dataset):
             transform=s1_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
+            temporal_dropout=s1_temporal_dropout,
+            return_timesteps=True,
         )
 
         self.s2_reader = S2Reader(
@@ -69,7 +58,23 @@ class S1S2Reader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
+            temporal_dropout=s2_temporal_dropout,
+            return_timesteps=True,
         )
+
+        if alignment == "1to2":
+            self.timesteps = self.s2_reader.timesteps
+            self.aligned_index = [
+                self.nearest_ind(self.s1_reader.timesteps, d) for d in self.timesteps
+            ]
+        elif alignment == "2to1":
+            self.timesteps = self.s1_reader.timesteps
+            self.aligned_index = [
+                self.nearest_ind(self.s2_reader.timesteps, d) for d in self.timesteps
+            ]
+
+        else:
+            raise ValueError("Please specify the alignment correctly.")
 
         assert self.s1_reader.labels.drop("path", axis=1).equals(
             self.s2_reader.labels.drop("path", axis=1)
@@ -86,21 +91,33 @@ class S1S2Reader(Dataset):
         return len(self.s2_reader.labels)
 
     def __getitem__(self, idx):
-        s1_image_stack, s1_label, s1_mask, s1_fid = self.s1_reader[idx]
-        s2_image_stack, s2_label, s2_mask, s2_fid = self.s2_reader[idx]
+        s1_image_stack, s1_label, s1_mask, s1_fid, s1_timesteps = self.s1_reader[idx]
+        s2_image_stack, s2_label, s2_mask, s2_fid, s2_timesteps = self.s2_reader[idx]
 
         assert s1_fid == s2_fid
         assert s1_label == s2_label
 
+        realign = (
+            s1_timesteps != self.s1_reader.timesteps or s2_timesteps != self.s2_reader.timesteps
+        )
+
+        timesteps = self.timesteps
         if self.alignment == "1to2":
-            s1_aligned = s1_image_stack[self.aligned_index]
-            s1_s2_image_stack = torch.cat((s2_image_stack, s1_aligned), dim=1)
+            if realign:
+                timesteps = s2_timesteps
+                aligned_index = [self.nearest_ind(s1_timesteps, d) for d in timesteps]
+            else:
+                aligned_index = self.aligned_index
+
+            s1_s2_image_stack = torch.cat((s2_image_stack, s1_image_stack[aligned_index]), dim=1)
             s1_s2_mask = s2_mask
         elif self.alignment == "2to1":
-            s2_aligned = s2_image_stack[self.aligned_index]
-            s1_s2_image_stack = torch.cat((s2_aligned, s1_image_stack), dim=1)
+            if realign:
+                timesteps = s1_timesteps
+                aligned_index = [self.nearest_ind(s2_timesteps, d) for d in timesteps]
+            else:
+                aligned_index = self.aligned_index
+            s1_s2_image_stack = torch.cat((s2_image_stack[aligned_index], s1_image_stack), dim=1)
             s1_s2_mask = s1_mask
 
-        assert len(s1_s2_image_stack) == len(self.aligned_index)
-
-        return s1_s2_image_stack, s1_label, s1_s2_mask, s1_fid
+        return s1_s2_image_stack, s1_label, s1_s2_mask, s1_fid, timesteps

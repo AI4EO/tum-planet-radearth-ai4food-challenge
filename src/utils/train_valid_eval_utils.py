@@ -81,7 +81,7 @@ def metrics(y_true, y_pred):
     )
 
 
-def train_epoch(model, optimizer, criterion, dataloader, device="cpu"):
+def train_epoch(model, optimizer, criterion, dataloader, device="cpu", scheduler=None):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR TRAINING
 
@@ -90,6 +90,7 @@ def train_epoch(model, optimizer, criterion, dataloader, device="cpu"):
     :param criterion: torch objective for loss calculation
     :param dataloader: training data loader
     :param device: where to run the epoch
+    :param scheduler: torch scheduler for learning rate decay
 
     :return: loss
     """
@@ -103,6 +104,8 @@ def train_epoch(model, optimizer, criterion, dataloader, device="cpu"):
             loss = criterion(model.forward(model_input), y_true.to(device))
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
             iterator.set_description(f"train loss={loss:.2f}")
             losses.append(loss)
     return torch.stack(losses)

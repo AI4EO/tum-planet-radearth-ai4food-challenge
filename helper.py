@@ -35,6 +35,9 @@ def load_reader(
     min_area_to_ignore: int = 1000,
     train_or_test: str = "train",
     alignment: str = "1to2",
+    s1_temporal_dropout: float = 0.0,
+    s2_temporal_dropout: float = 0.0,
+    planet_temporal_dropout: float = 0.0,
 ):
     label_file = (
         root
@@ -76,13 +79,25 @@ def load_reader(
         planet_5day_input_dir = planet_5day_input_dir + "_259"
         planet_daily_input_dir = planet_daily_input_dir + "_259"
 
+    s1_transform = Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform
+    s2_transform = Sentinel2Transform(
+        include_cloud=include_cloud,
+        include_ndvi=include_ndvi,
+        include_bands=include_bands,
+        **kwargs,
+    ).transform
+    planet_transform = PlanetTransform(
+        include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
+    ).transform
+
     if satellite == "sentinel_1":
         reader = S1Reader(
             input_dir=s1_input_dir,
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
+            transform=s1_transform,
+            temporal_dropout=s1_temporal_dropout,
         )
     elif satellite == "sentinel_2":
         reader = S2Reader(
@@ -91,12 +106,8 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             include_cloud=include_cloud,
-            transform=Sentinel2Transform(
-                include_cloud=include_cloud,
-                include_ndvi=include_ndvi,
-                include_bands=include_bands,
-                **kwargs,
-            ).transform,
+            transform=s2_transform,
+            temporal_dropout=s2_temporal_dropout,
         )
     elif satellite == "s1_s2":
         reader = S1S2Reader(
@@ -106,14 +117,11 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             include_cloud=include_cloud,
-            s1_transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
-            s2_transform=Sentinel2Transform(
-                include_cloud=include_cloud,
-                include_ndvi=include_ndvi,
-                include_bands=include_bands,
-                **kwargs,
-            ).transform,
+            s1_transform=s1_transform,
+            s2_transform=s2_transform,
             alignment=alignment,
+            s1_temporal_dropout=s1_temporal_dropout,
+            s2_temporal_dropout=s2_temporal_dropout,
         )
     elif satellite == "planet_5day":
         reader = PlanetReader(
@@ -121,9 +129,8 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=PlanetTransform(
-                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
-            ).transform,
+            transform=planet_transform,
+            temporal_dropout=planet_temporal_dropout,
         )
     elif satellite == "planet_daily":
         reader = PlanetReader(
@@ -131,9 +138,8 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            transform=PlanetTransform(
-                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
-            ).transform,
+            transform=planet_transform,
+            temporal_dropout=planet_temporal_dropout,
         )
     elif satellite == "s1_s2_planet_daily":
         reader = S1S2PlanetReader(
@@ -143,16 +149,12 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
-            s1_transform=Sentinel1Transform(include_rvi=include_rvi, **kwargs).transform,
-            s2_transform=Sentinel2Transform(
-                include_cloud=include_cloud,
-                include_ndvi=include_ndvi,
-                include_bands=include_bands,
-                **kwargs,
-            ).transform,
-            planet_transform=PlanetTransform(
-                include_bands=include_bands, include_ndvi=include_ndvi, **kwargs
-            ).transform,
+            s1_transform=s1_transform,
+            s2_transform=s2_transform,
+            planet_transform=planet_transform,
+            s1_temporal_dropout=s1_temporal_dropout,
+            s2_temporal_dropout=s2_temporal_dropout,
+            planet_temporal_dropout=planet_temporal_dropout,
         )
 
     return label_names, reader

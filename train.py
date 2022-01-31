@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from sklearn.metrics import confusion_matrix
 from torch.nn import CrossEntropyLoss
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 
 import wandb
 from helper import load_reader
@@ -47,7 +47,7 @@ arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
 arg_parser.add_argument("--image_size", type=int, default=32)
-arg_parser.add_argument("--save_model_threshold", type=float, default=0.8)
+arg_parser.add_argument("--save_model_threshold", type=float, default=0.9)
 arg_parser.add_argument("--pse_sample_size", type=int, default=32)
 arg_parser.add_argument("--validation_split", type=float, default=0.2)
 arg_parser.add_argument("--split_by", type=str, default="longitude", help="latitude or longitude")
@@ -55,6 +55,11 @@ arg_parser.add_argument("--include_bands", type=bool, default=True)
 arg_parser.add_argument("--include_cloud", type=bool, default=True)
 arg_parser.add_argument("--include_ndvi", type=bool, default=True)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
+arg_parser.add_argument("--s1_temporal_dropout", type=float, default=0.0)
+arg_parser.add_argument("--s2_temporal_dropout", type=float, default=0.0)
+arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
+arg_parser.add_argument("--lr_scheduler", type=str, default="none")
+
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 arg_parser.add_argument(
@@ -89,6 +94,9 @@ kwargs = dict(
     min_area_to_ignore=1000,
     train_or_test="train",
     alignment=config["alignment"],
+    s1_temporal_dropout=config["s1_temporal_dropout"],
+    s2_temporal_dropout=config["s2_temporal_dropout"],
+    planet_temporal_dropout=config["planet_temporal_dropout"],
 )
 
 if config["pos"] == "both":
@@ -150,8 +158,22 @@ print("\u2713 Model initialized")
 # ----------------------------------------------------------------------------------------------------------------------
 # Optimizer and loss function
 # ----------------------------------------------------------------------------------------------------------------------
-optimizer = Adam(model.parameters(), lr=config["lr"], weight_decay=1e-6)
-loss_criterion = CrossEntropyLoss(reduction="mean")
+if config["optimizer"] == "Adam":
+    optimizer = Adam(model.parameters(), lr=config["lr"], weight_decay=1e-6)
+elif config["optimizer"] == "SGD":
+    optimizer = SGD(model.parameters(), lr=config["lr"], momentum=0.9)
+scheduler = None
+if config["lr_scheduler"] == "onecyclelr":
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=config["lr"],
+        steps_per_epoch=config["train_dataset_size"],
+        epochs=config["num_epochs"],
+    )
+
+config["weight"] = [1.0, 1.0, 1.0, 1.0, 1.0]
+weight = torch.tensor(config["weight"]).to(DEVICE)
+loss_criterion = CrossEntropyLoss(reduction="mean", weight=weight)
 
 print("\u2713 Optimizer and loss set")
 # ----------------------------------------------------------------------------------------------------------------------
@@ -173,7 +195,9 @@ valid_losses = []
 accuracies = []
 model_path = None
 for epoch in range(config["num_epochs"] + 1):
-    train_loss = tveu.train_epoch(model, optimizer, loss_criterion, train_loader, device=DEVICE)
+    train_loss = tveu.train_epoch(
+        model, optimizer, loss_criterion, train_loader, device=DEVICE, scheduler=scheduler
+    )
     valid_loss, y_true, y_pred, *_ = tveu.validation_epoch(
         model, loss_criterion, valid_loader, device=DEVICE
     )
@@ -205,7 +229,7 @@ for epoch in range(config["num_epochs"] + 1):
         torch.save(
             dict(
                 model_state=model.state_dict(),
-                optimizer_state=optimizer.state_dict(),
+                # optimizer_state=optimizer.state_dict(),
                 epoch=epoch,
                 config=config,
             ),
@@ -232,9 +256,15 @@ for epoch in range(config["num_epochs"] + 1):
         ]
     }
     metrics["max_accuracy"] = max(accuracies)
+    closeness = np.abs(valid_loss - train_loss) + valid_loss
     wandb.log(
         {
-            "losses": dict(train=train_loss, valid=valid_loss, valid_min=min(valid_losses)),
+            "losses": dict(
+                train=train_loss,
+                valid=valid_loss,
+                valid_min=min(valid_losses),
+                train_val_closeness=closeness,
+            ),
             "epoch": epoch,
             "metrics": metrics,
             "confusion_matrix": tveu.confusion_matrix_figure(cm, labels=label_names),
