@@ -22,6 +22,7 @@ class EOTransformer:
         image_size=32,
         pse_sample_size=64,
         is_train=True,
+        temporal_augmentation=False,
     ):
         """
         THIS FUNCTION INITIALIZES THE DATA TRANSFORMER.
@@ -35,6 +36,12 @@ class EOTransformer:
         self.normalize = normalize
         self.pse_sample_size = pse_sample_size
         self.is_train = is_train
+        self.temporal_augmentation = temporal_augmentation
+
+        if temporal_augmentation:
+            self.temporal_augmentation_model = torch.nn.Identity()
+        else:
+            self.temporal_augmentation_model = None
 
     def normalize_and_torchify(self, image_stack, mask=None):
         image_stack = image_stack * 1e-4
@@ -105,7 +112,23 @@ class EOTransformer:
         if return_unnormalized_numpy:
             return image_stack, mask
 
-        return self.normalize_and_torchify(image_stack, mask)
+        image_stack, mask = self.normalize_and_torchify(image_stack, mask)
+
+        if self.is_train and self.temporal_augmentation and np.random.rand() < 0.8:
+            assert (
+                len(image_stack.shape) == 3
+            ), f"Expecting an image stack with shape (Temporal, Bands, Pixels) but got shape {image_stack.shape}"
+
+            synthetic_image_stack = np.zeros(image_stack.shape)
+            # Go through pixel
+            for i in image_stack.shape[2]:
+                synthetic_image_stack[:, :, i] = self.temporal_augmentation_model(
+                    image_stack[:, :, i]
+                )
+
+            return synthetic_image_stack, mask
+
+        return image_stack, mask
 
 
 class PlanetTransform(EOTransformer):
