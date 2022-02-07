@@ -59,6 +59,7 @@ arg_parser.add_argument("--s1_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--s2_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--lr_scheduler", type=str, default="none")
+arg_parser.add_argument("--temporal_augmentation", type=bool, default=False)
 
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
@@ -97,6 +98,7 @@ kwargs = dict(
     s1_temporal_dropout=config["s1_temporal_dropout"],
     s2_temporal_dropout=config["s2_temporal_dropout"],
     planet_temporal_dropout=config["planet_temporal_dropout"],
+    temporal_augmentation=config["temporal_augmentation"],
 )
 
 if config["pos"] == "both":
