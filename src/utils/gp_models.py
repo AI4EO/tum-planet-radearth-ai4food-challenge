@@ -2,7 +2,7 @@ import gpytorch
 import torch
 from gpytorch.models import AbstractVariationalGP
 from gpytorch.variational import CholeskyVariationalDistribution
-from gpytorch.variational import WhitenedVariationalStrategy
+from gpytorch.variational import VariationalStrategy
 
 import pdb
 
@@ -13,7 +13,7 @@ class GPRegressionLayer1(AbstractVariationalGP):
             num_inducing_points=40, batch_size=batch_size
         )
         inducing_points = torch.rand(batch_size, 40, 1)
-        variational_strategy = WhitenedVariationalStrategy(
+        variational_strategy = VariationalStrategy(
             self, inducing_points, variational_distribution, learn_inducing_locations=True
         )
         super(GPRegressionLayer1, self).__init__(variational_strategy)
