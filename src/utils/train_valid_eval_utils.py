@@ -148,3 +148,78 @@ def validation_epoch(model, criterion, dataloader, device="cpu"):
             torch.cat(y_score_list),
             torch.cat(field_ids_list),
         )
+
+
+def train_epoch_ta(
+    model, lstm_optimizer, gp_optimizer, lstm_loss, gp_loss, dataloader, device="cpu"
+):
+    """
+    THIS FUNCTION ITERATES A SINGLE EPOCH FOR TRAINING
+
+    :param model: torch model for training
+    :param optimizer: torch training optimizer
+    :param criterion: torch objective for loss calculation
+    :param dataloader: training data loader
+    :param device: where to run the epoch
+
+    :return: loss
+    """
+    model.train()
+    losses = list()
+    with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
+        for idx, batch in iterator:
+            lstm_optimizer.zero_grad()
+            gp_optimizer.zero_grad()
+            x, _, _, _ = batch
+            input_timesteps, output_timesteps = model.input_timesteps, model.output_timesteps
+            model_input = x.to(device)
+            lstm_y_true = x[:, input_timesteps : (input_timesteps + output_timesteps)].to(device)
+            lstm_y_pred, gp_y_pred = model.forward(model_input)
+            gp_max_ll = 0
+            pdb.set_trace()
+            for i in range(x.shape[1]):
+                gp_max_ll -= gp_loss(gp_y_pred[i], x[:, i + 1].transpose(0, 1).to(device)).sum()
+
+            loss = lstm_loss(lstm_y_pred, lstm_y_true) + gp_max_ll
+
+            loss.backward()
+            lstm_optimizer.step()
+            gp_optimizer.step()
+            iterator.set_description(f"train loss={loss:.2f}")
+            losses.append(loss)
+    return torch.stack(losses)
+
+
+def validation_epoch_ta(model, lstm_loss, gp_loss, dataloader, device="cpu"):
+    """
+    THIS FUNCTION ITERATES A SINGLE EPOCH FOR VALIDATION
+
+    :param model: torch model for validation
+    :param criterion: torch objective for loss calculation
+    :param dataloader: validation data loader
+    :param device: where to run the epoch
+
+    :return: loss
+    """
+    model.eval()
+    with torch.no_grad():
+        losses = list()
+        with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
+            for idx, batch in iterator:
+                x, _, _, _ = batch
+                input_timesteps, output_timesteps = model.input_timesteps, model.output_timesteps
+                model_input = x.to(device)
+                lstm_y_true = x[:, input_timesteps : (input_timesteps + output_timesteps)].to(
+                    device
+                )
+
+                lstm_y_pred, gp_y_pred = model.forward(model_input)
+                gp_max_ll = 0
+                for i in range(x.shape[1]):
+                    gp_max_ll -= gp_loss(gp_y_pred[:i], x[:, i + 1].to(device)).sum()
+
+                loss = lstm_loss(lstm_y_pred, lstm_y_true) + gp_max_ll
+
+                iterator.set_description(f"valid loss={loss:.2f}")
+                losses.append(loss)
+        return torch.stack(losses)
