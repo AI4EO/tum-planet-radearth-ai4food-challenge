@@ -26,7 +26,7 @@ arg_parser = argparse.ArgumentParser(description="Train a model for temporal aug
 arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
-arg_parser.add_argument("--num_epochs", type=int, default=40)
+arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
     "--satellite", type=str, default="sentinel_2", help="sentinel_2, planet_daily"
 )
@@ -41,6 +41,7 @@ arg_parser.add_argument("--split_by", type=str, default="longitude", help="latit
 arg_parser.add_argument("--lstm_hidden_size", type=int, default=128)
 arg_parser.add_argument("--lstm_dropout", type=float, default=0.2)
 arg_parser.add_argument("--input_timesteps", type=int, default=36)
+arg_parser.add_argument("--save_model_threshold", type=float, default=100.0)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 
@@ -141,7 +142,7 @@ class TemporalAugmentor(nn.Module):
 
         seq_length = x.shape[1]
 
-        for i in range(seq_length):
+        for i in range(seq_length - 1):
             input = x[:, i : i + 1, :]
             if i < self.input_timesteps:
                 output, hidden_tuple = self.lstm(input, hidden_tuple)
@@ -193,12 +194,20 @@ gp_optimizer = Adam(
     ],
     lr=0.002,
 )
-lstm_loss = nn.SmoothL1Loss()
+lstm_loss_func = nn.SmoothL1Loss()
 
 # Our loss for GP object. We're using the VariationalELBO, which essentially just computes the ELBO
-gp_loss = gpytorch.mlls.VariationalELBO(
+variational_elbo = gpytorch.mlls.VariationalELBO(
     model.likelihood, model.gp_layer, num_data=config["batch_size"], combine_terms=True
 )
+
+
+def gp_loss_func(gp_y_pred: List[torch.Tensor], y_true: torch.Tensor):
+    gp_loss = 0
+    for i in range(y_true.shape[1] - 1):
+        gp_loss -= variational_elbo(gp_y_pred[i], y_true[:, i + 1].transpose(0, 1)).sum()
+    return gp_loss
+
 
 print("\u2713 Optimizer and loss set")
 # ----------------------------------------------------------------------------------------------------------------------
@@ -218,49 +227,57 @@ valid_losses = []
 accuracies = []
 model_path = None
 for epoch in range(config["num_epochs"] + 1):
-    train_loss = tveu.train_epoch_ta(
+    train_loss, train_lstm_loss, train_gp_loss = tveu.train_epoch_ta(
         model=model,
         lstm_optimizer=lstm_optimizer,
         gp_optimizer=gp_optimizer,
-        lstm_loss=lstm_loss,
-        gp_loss=gp_loss,
+        lstm_loss_func=lstm_loss_func,
+        gp_loss_func=gp_loss_func,
         dataloader=train_loader,
         device=DEVICE,
     )
-    valid_loss = tveu.validation_epoch_autoregressive(
-        model=model, stm_loss=lstm_loss, gp_loss=gp_loss, dataloader=valid_loader, device=DEVICE
+    valid_loss, valid_lstm_loss, valid_gp_loss = tveu.validation_epoch_ta(
+        model=model,
+        lstm_loss_func=lstm_loss_func,
+        gp_loss_func=gp_loss_func,
+        dataloader=valid_loader,
+        device=DEVICE,
     )
 
-    valid_loss = valid_loss.cpu().detach().numpy()[0]
-    train_loss = train_loss.cpu().detach().numpy()[0]
-    valid_losses.append(valid_loss)
+    losses = {
+        "train": train_loss,
+        "train_lstm": train_lstm_loss,
+        "train_gp": train_gp_loss,
+        "valid": valid_loss,
+        "valid_lstm": valid_lstm_loss,
+        "valid_gp": valid_gp_loss,
+    }
+    losses = {k: v.item() for k, v in losses.items()}
 
-    # print(f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} ")
-    # if config["save_model_threshold"] > valid_loss:
-    #     model_path = f"model_dump/{run.id}/{epoch}.pth"
-    #     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
-    #     torch.save(
-    #         dict(
-    #             model_state=model.state_dict(),
-    #             # optimizer_state=optimizer.state_dict(),
-    #             epoch=epoch,
-    #             config=config,
-    #         ),
-    #         model_path,
-    #     )
+    valid_losses.append(losses["valid"])
+
+    print(f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} ")
+    if config["save_model_threshold"] > valid_loss:
+        model_path = f"temporal_augment_model_dump/{run.id}/{epoch}.pth"
+        Path(model_path).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            dict(
+                model_state=model.state_dict(),
+                # optimizer_state=optimizer.state_dict(),
+                epoch=epoch,
+                config=config,
+            ),
+            model_path,
+        )
 
     if not config["enable_wandb"]:
         continue
 
-    closeness = np.abs(valid_loss - train_loss) + valid_loss
+    closeness = np.abs(losses["valid"] - losses["train"]) + losses["valid"]
+    losses["closeness"] = closeness
     wandb.log(
         {
-            "losses": dict(
-                train=train_loss,
-                valid=valid_loss,
-                valid_min=min(valid_losses),
-                train_val_closeness=closeness,
-            ),
+            "losses": losses,
             "epoch": epoch,
         }
     )

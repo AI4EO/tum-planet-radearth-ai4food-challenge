@@ -151,7 +151,7 @@ def validation_epoch(model, criterion, dataloader, device="cpu"):
 
 
 def train_epoch_ta(
-    model, lstm_optimizer, gp_optimizer, lstm_loss, gp_loss, dataloader, device="cpu"
+    model, lstm_optimizer, gp_optimizer, lstm_loss_func, gp_loss_func, dataloader, device="cpu"
 ):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR TRAINING
@@ -166,6 +166,8 @@ def train_epoch_ta(
     """
     model.train()
     losses = list()
+    lstm_losses = list()
+    gp_losses = list()
     with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
         for idx, batch in iterator:
             lstm_optimizer.zero_grad()
@@ -175,22 +177,21 @@ def train_epoch_ta(
             model_input = x.to(device)
             lstm_y_true = x[:, input_timesteps : (input_timesteps + output_timesteps)].to(device)
             lstm_y_pred, gp_y_pred = model.forward(model_input)
-            gp_max_ll = 0
-            pdb.set_trace()
-            for i in range(x.shape[1]):
-                gp_max_ll -= gp_loss(gp_y_pred[i], x[:, i + 1].transpose(0, 1).to(device)).sum()
-
-            loss = lstm_loss(lstm_y_pred, lstm_y_true) + gp_max_ll
-
+            gp_loss = gp_loss_func(gp_y_pred, x.to(device))
+            lstm_loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
+            loss = lstm_loss + gp_loss
             loss.backward()
             lstm_optimizer.step()
             gp_optimizer.step()
             iterator.set_description(f"train loss={loss:.2f}")
             losses.append(loss)
-    return torch.stack(losses)
+            lstm_losses.append(lstm_loss)
+            gp_losses.append(gp_loss)
+    with torch.no_grad():
+        return (torch.mean(torch.stack(ls)) for ls in [losses, lstm_losses, gp_losses])
 
 
-def validation_epoch_ta(model, lstm_loss, gp_loss, dataloader, device="cpu"):
+def validation_epoch_ta(model, lstm_loss_func, gp_loss_func, dataloader, device="cpu"):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR VALIDATION
 
@@ -204,6 +205,8 @@ def validation_epoch_ta(model, lstm_loss, gp_loss, dataloader, device="cpu"):
     model.eval()
     with torch.no_grad():
         losses = list()
+        lstm_losses = list()
+        gp_losses = list()
         with tqdm(enumerate(dataloader), total=len(dataloader), position=0, leave=True) as iterator:
             for idx, batch in iterator:
                 x, _, _, _ = batch
@@ -214,12 +217,12 @@ def validation_epoch_ta(model, lstm_loss, gp_loss, dataloader, device="cpu"):
                 )
 
                 lstm_y_pred, gp_y_pred = model.forward(model_input)
-                gp_max_ll = 0
-                for i in range(x.shape[1]):
-                    gp_max_ll -= gp_loss(gp_y_pred[:i], x[:, i + 1].to(device)).sum()
-
-                loss = lstm_loss(lstm_y_pred, lstm_y_true) + gp_max_ll
+                gp_loss = gp_loss_func(gp_y_pred, x.to(device))
+                lstm_loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
+                loss = lstm_loss + gp_loss
 
                 iterator.set_description(f"valid loss={loss:.2f}")
                 losses.append(loss)
-        return torch.stack(losses)
+                lstm_losses.append(lstm_loss)
+                gp_losses.append(gp_loss)
+        return (torch.mean(torch.stack(ls)) for ls in [losses, lstm_losses, gp_losses])
