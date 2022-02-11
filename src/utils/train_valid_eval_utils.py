@@ -151,7 +151,14 @@ def validation_epoch(model, criterion, dataloader, device="cpu"):
 
 
 def train_epoch_ta(
-    model, lstm_optimizer, gp_optimizer, lstm_loss_func, gp_loss_func, dataloader, device="cpu"
+    model,
+    lstm_optimizer,
+    gp_optimizer,
+    lstm_loss_func,
+    gp_loss_func,
+    dataloader,
+    device="cpu",
+    gp_loss_weight=0.01,
 ):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR TRAINING
@@ -179,7 +186,7 @@ def train_epoch_ta(
             lstm_y_pred, gp_y_pred = model.forward(model_input)
             gp_loss = gp_loss_func(gp_y_pred, x.to(device))
             lstm_loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
-            loss = lstm_loss + gp_loss
+            loss = lstm_loss + (gp_loss_weight * gp_loss)
             loss.backward()
             lstm_optimizer.step()
             gp_optimizer.step()
@@ -191,7 +198,9 @@ def train_epoch_ta(
         return (torch.mean(torch.stack(ls)) for ls in [losses, lstm_losses, gp_losses])
 
 
-def validation_epoch_ta(model, lstm_loss_func, gp_loss_func, dataloader, device="cpu"):
+def validation_epoch_ta(
+    model, lstm_loss_func, gp_loss_func, dataloader, device="cpu", gp_loss_weight=0.01
+):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR VALIDATION
 
@@ -219,7 +228,7 @@ def validation_epoch_ta(model, lstm_loss_func, gp_loss_func, dataloader, device=
                 lstm_y_pred, gp_y_pred = model.forward(model_input)
                 gp_loss = gp_loss_func(gp_y_pred, x.to(device))
                 lstm_loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
-                loss = lstm_loss + gp_loss
+                loss = lstm_loss + (gp_loss_weight * gp_loss)
 
                 iterator.set_description(f"valid loss={loss:.2f}")
                 losses.append(loss)
