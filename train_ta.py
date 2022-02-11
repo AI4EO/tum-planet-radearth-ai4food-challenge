@@ -28,12 +28,13 @@ arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
 arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
-    "--satellite", type=str, default="sentinel_2", help="sentinel_2, planet_daily"
+    "--satellite", type=str, default="planet_daily", help="sentinel_2, planet_daily"
 )
 arg_parser.add_argument(
     "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
 )
-arg_parser.add_argument("--lr", type=float, default=0.001)
+arg_parser.add_argument("--lstm_lr", type=float, default=0.001)
+arg_parser.add_argument("--gp_lr", type=float, default=0.01)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
 arg_parser.add_argument("--loss", type=str, default="SmoothL1")
 arg_parser.add_argument("--validation_split", type=float, default=0.2)
@@ -41,7 +42,9 @@ arg_parser.add_argument("--split_by", type=str, default="longitude", help="latit
 arg_parser.add_argument("--lstm_hidden_size", type=int, default=128)
 arg_parser.add_argument("--lstm_dropout", type=float, default=0.2)
 arg_parser.add_argument("--input_timesteps", type=int, default=36)
-arg_parser.add_argument("--save_model_threshold", type=float, default=100.0)
+arg_parser.add_argument("--save_model_threshold", type=float, default=1.0)
+arg_parser.add_argument("--gp_loss_weight", type=float, default=0.01)
+arg_parser.add_argument("--gp_inference_index", type=int, default=10)
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 
@@ -107,12 +110,17 @@ print("\u2713 Data loaders initialized")
 # ----------------------------------------------------------------------------------------------------------------------
 # Initialize model
 # ----------------------------------------------------------------------------------------------------------------------
-# TODO
-# gp_layer
-
-
 class TemporalAugmentor(nn.Module):
-    def __init__(self, num_bands, hidden_size, dropout, input_timesteps, output_timesteps, device):
+    def __init__(
+        self,
+        num_bands,
+        hidden_size,
+        dropout,
+        input_timesteps,
+        output_timesteps,
+        gp_inference_indexes,
+        device,
+    ):
         super(TemporalAugmentor, self).__init__()
 
         # LSTM
@@ -130,41 +138,68 @@ class TemporalAugmentor(nn.Module):
         # Gaussian Process
         self.gp_layer = GPRegressionLayer1(batch_size=num_bands)
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood(batch_size=num_bands)
+        self.gp_inference_indexes = gp_inference_indexes
 
         self.to(device)
 
-    def forward(self, x):
+    def forward(self, x, training=True):
 
         hidden_tuple: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
 
-        # predicted_output: List[torch.Tensor] = []
-        gp_output_list: List[torch.Tensor] = []
-
         seq_length = x.shape[1]
 
+        gp_output_list: List[torch.Tensor] = []  # List to store gp outputs (training)
+        lstm_output_list: List[torch.Tensor] = []  # List to store lstm outputs (training)
+        inference_output_list: List[torch.Tensor] = []  # List to store lstm + gp output (inference)
+
+        # Loop through input sequence
         for i in range(seq_length - 1):
+
             input = x[:, i : i + 1, :]
+
+            if training:
+                # Make prediction of next time step with gp (for training)
+                gp_pred = self.gp_layer(input.permute(2, 0, 1))
+                gp_output_list.append(gp_pred)
+
             if i < self.input_timesteps:
-                output, hidden_tuple = self.lstm(input, hidden_tuple)
-                output = self.to_bands(torch.transpose(output[0, :, :, :], 0, 1))
-                # predicted_output.append(output)
+                # Use the input to make the next lstm prediction
+                lstm_pred, hidden_tuple = self.lstm(input, hidden_tuple)
+                lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
+            else:
+                if i == self.input_timesteps:
+                    # Use the last lstm prediction from the real sequence as the first output step
+                    if training:
+                        lstm_output_list.append(lstm_pred)
+                    else:
+                        inference_output_list.append(lstm_pred)
+                        next_step_pred = lstm_pred
 
-            gp_pred = self.gp_layer(input.permute(2, 0, 1))
-            gp_output_list.append(gp_pred)
+                if training:
+                    # Make a prediction of the next time step with lstm
+                    lstm_pred, hidden_tuple = self.lstm(lstm_pred, hidden_tuple)
+                    lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
+                    lstm_output_list.append(lstm_pred)
+                else:
+                    if (i - self.input_timesteps) in self.gp_inference_indexes:
+                        # Generate next hidden tuple
+                        _, hidden_tuple = self.lstm(next_step_pred, hidden_tuple)
+                        gp_pred = self.likelihood(self.gp_layer(next_step_pred.permute(2, 0, 1)))
+                        next_step_pred = gp_pred.rsample().transpose(0, 1).unsqueeze(1)
+                    else:
+                        next_step_pred, hidden_tuple = self.lstm(next_step_pred, hidden_tuple)
+                        next_step_pred = self.to_bands(
+                            torch.transpose(next_step_pred[0, :, :, :], 0, 1)
+                        )
 
-        # we have already predicted the first output timestep (the last
-        # output of the loop above)
-        lstm_output_list: List[torch.Tensor] = [output]
+                    inference_output_list.append(next_step_pred)
 
-        for i in range(self.output_timesteps - 1):
-            output, hidden_tuple = self.lstm(output, hidden_tuple)
-            output = self.to_bands(torch.transpose(output[0, :, :, :], 0, 1))
-            # predicted_output.append(output)
-            lstm_output_list.append(output)
-
-        assert len(lstm_output_list) == self.output_timesteps
-
-        return torch.cat(lstm_output_list, dim=1), gp_output_list
+        if training:
+            assert len(lstm_output_list) == self.output_timesteps
+            return torch.cat(lstm_output_list, dim=1), gp_output_list
+        else:
+            assert len(inference_output_list) == self.output_timesteps
+            return torch.cat(inference_output_list, dim=1)
 
 
 model = TemporalAugmentor(
@@ -173,6 +208,7 @@ model = TemporalAugmentor(
     dropout=config["lstm_dropout"],
     input_timesteps=config["input_timesteps"],
     output_timesteps=config["output_timesteps"],
+    gp_inference_indexes=[config["gp_inference_index"]],
     device=DEVICE,
 )
 
@@ -186,13 +222,13 @@ for p in model.parameters():
 # ----------------------------------------------------------------------------------------------------------------------
 # Optimizer and loss function
 # ----------------------------------------------------------------------------------------------------------------------
-lstm_optimizer = Adam(model.parameters(), lr=config["lr"], weight_decay=1e-6)
+lstm_optimizer = Adam(model.parameters(), lr=config["lstm_lr"], weight_decay=1e-6)
 gp_optimizer = Adam(
     [
         {"params": model.gp_layer.parameters()},
         {"params": model.likelihood.parameters()},
     ],
-    lr=0.002,
+    lr=config["gp_lr"],
 )
 lstm_loss_func = nn.SmoothL1Loss()
 
@@ -203,10 +239,11 @@ variational_elbo = gpytorch.mlls.VariationalELBO(
 
 
 def gp_loss_func(gp_y_pred: List[torch.Tensor], y_true: torch.Tensor):
-    gp_loss = 0
-    for i in range(y_true.shape[1] - 1):
-        gp_loss -= variational_elbo(gp_y_pred[i], y_true[:, i + 1].transpose(0, 1)).sum()
-    return gp_loss
+    gp_loss_sum = 0
+    predicted_seq_len = y_true.shape[1] - 1
+    for i in range(predicted_seq_len):
+        gp_loss_sum -= variational_elbo(gp_y_pred[i], y_true[:, i + 1].transpose(0, 1)).sum()
+    return gp_loss_sum / predicted_seq_len
 
 
 print("\u2713 Optimizer and loss set")
@@ -235,6 +272,7 @@ for epoch in range(config["num_epochs"] + 1):
         gp_loss_func=gp_loss_func,
         dataloader=train_loader,
         device=DEVICE,
+        gp_loss_weight=config["gp_loss_weight"],
     )
     valid_loss, valid_lstm_loss, valid_gp_loss = tveu.validation_epoch_ta(
         model=model,
@@ -242,6 +280,7 @@ for epoch in range(config["num_epochs"] + 1):
         gp_loss_func=gp_loss_func,
         dataloader=valid_loader,
         device=DEVICE,
+        gp_loss_weight=config["gp_loss_weight"],
     )
 
     losses = {
