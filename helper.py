@@ -38,7 +38,6 @@ def load_reader(
     s1_temporal_dropout: float = 0.0,
     s2_temporal_dropout: float = 0.0,
     planet_temporal_dropout: float = 0.0,
-    temporal_augmentation: bool = False,
 ):
     label_file = (
         root
@@ -60,7 +59,6 @@ def load_reader(
         spatial_backbone=spatial_backbone,
         normalize=True,
         is_train=train_or_test == "train",
-        temporal_augmentation=temporal_augmentation,
     )
 
     fill = ""
