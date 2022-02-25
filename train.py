@@ -31,7 +31,7 @@ arg_parser = ArgumentParser()
 arg_parser.add_argument("--competition", type=str, default=competition)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
-arg_parser.add_argument("--num_epochs", type=int, default=40)
+arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
     "--satellite",
     type=str,
@@ -45,7 +45,7 @@ arg_parser.add_argument("--lr", type=float, default=0.001)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
 arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
-arg_parser.add_argument("--temporal_backbone", type=str, default="LSTM")
+arg_parser.add_argument("--temporal_backbone", type=str, default="tempcnn")
 arg_parser.add_argument("--image_size", type=int, default=32)
 arg_parser.add_argument("--save_model_threshold", type=float, default=0.9)
 arg_parser.add_argument("--pse_sample_size", type=int, default=32)

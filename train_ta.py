@@ -44,6 +44,7 @@ arg_parser.add_argument("--input_timesteps", type=int, default=36)
 arg_parser.add_argument("--save_model_threshold", type=float, default=1.0)
 arg_parser.add_argument("--gp_loss_weight", type=float, default=0.01)
 arg_parser.add_argument("--gp_inference_index", type=int, default=10)
+arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
 
@@ -64,10 +65,9 @@ kwargs = dict(
     include_ndvi=False,
     include_rvi=False,
     image_size=None,
-    spatial_backbone="mean_pixel",
+    spatial_backbone=config["spatial_backbone"],
     min_area_to_ignore=1000,
     train_or_test="train",
-    temporal_augmentation=False,
 )
 if config["pos"] == "both":
     label_names_258, reader_258 = load_reader(pos="34S_19E_258N", **kwargs)
