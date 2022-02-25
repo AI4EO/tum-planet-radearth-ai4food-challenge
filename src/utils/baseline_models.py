@@ -5,6 +5,7 @@ Kondmann, Lukas, et al. (2021),
 """
 
 import breizhcrops as bzh
+import numpy as np
 from torchvision import models
 import pdb
 import torch
@@ -60,6 +61,7 @@ class SpatiotemporalModel(nn.Module):
         num_classes=9,
         sequencelength=365,
         pretrained_spatial=True,
+        ta_model_path=None,
         device="cpu",
     ):
         super(SpatiotemporalModel, self).__init__()
@@ -76,6 +78,7 @@ class SpatiotemporalModel(nn.Module):
             input_dim=output_dim,
             num_classes=num_classes,
             sequencelength=sequencelength,
+            ta_model_path=ta_model_path,
             device=device,
         )
 
@@ -160,7 +163,7 @@ class SpatialEncoder(torch.nn.Module):
 
 
 class TemporalEncoder(nn.Module):
-    def __init__(self, backbone, input_dim, num_classes, sequencelength, device):
+    def __init__(self, backbone, input_dim, num_classes, sequencelength, ta_model_path, device):
         super(TemporalEncoder, self).__init__()
         """
         A wrapper around Breizhcrops models for time series classification
@@ -205,9 +208,34 @@ class TemporalEncoder(nn.Module):
 
         self.modelname = backbone
 
+        self.temporal_augmentation_model = None
+
+        if ta_model_path:
+            from src.temporal_augmentor import TemporalAugmentor
+
+            saved = torch.load(ta_model_path)
+            config = saved["config"]
+            self.temporal_augmentation_model = TemporalAugmentor(
+                num_bands=config["input_dim"],
+                hidden_size=config["lstm_hidden_size"],
+                dropout=config["lstm_dropout"],
+                input_timesteps=config["input_timesteps"],
+                output_timesteps=config["output_timesteps"],
+                gp_inference_indexes=[10],
+                device=device,
+            )
+            self.temporal_augmentation_model.load_state_dict(saved["model_state"])
+            self.temporal_augmentation_model.eval()
+            print("\u2713 Model loaded")
+        else:
+            self.temporal_augmentation_model = None
+
     def forward(self, x):
         if type(x) == tuple:
             x, _ = x
+        if self.temporal_augmentation_model and self.model.training and (0.8 > np.random.rand()):
+            x = self.temporal_augmentation_model(x, training=False)
+
         return self.model(x)
 
 
