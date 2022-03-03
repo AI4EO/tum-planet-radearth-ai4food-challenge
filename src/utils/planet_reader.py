@@ -10,9 +10,13 @@ import rasterio as rio
 from rasterio import features
 import numpy as np
 import os
+import json
 import zipfile
 import glob
 import pdb
+
+from datetime import datetime
+from pathlib import Path
 from tqdm import tqdm
 
 
@@ -29,6 +33,9 @@ class PlanetReader(torch.utils.data.Dataset):
         transform=None,
         min_area_to_ignore=1000,
         selected_time_points=None,
+        tzinfo=None,
+        temporal_dropout=0.0,
+        return_timesteps=False,
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -51,6 +58,22 @@ class PlanetReader(torch.utils.data.Dataset):
         self.npyfolder = os.path.abspath(input_dir + "/time_series")
         self.labels = PlanetReader._setup(input_dir, label_dir, self.npyfolder, min_area_to_ignore)
 
+        with (Path(input_dir) / "collection.json").open("rb") as f:
+            planet_collection = json.load(f)
+
+        start_str, end_str = planet_collection["extent"]["temporal"]["interval"][0]
+        start = datetime.strptime(start_str, "%Y-%m-%dT%H:%M:%SZ")
+        end = datetime.strptime(end_str, "%Y-%m-%dT%H:%M:%SZ")
+        self.timesteps = np.array(
+            [
+                datetime.fromordinal(o).replace(tzinfo=tzinfo)
+                for o in range(start.toordinal(), end.toordinal() + 1)
+            ]
+        )
+
+        self.temporal_dropout = temporal_dropout
+        self.return_timesteps = return_timesteps
+
     def __len__(self):
         """
         THIS FUNCTION RETURNS THE LENGTH OF DATASET
@@ -60,7 +83,7 @@ class PlanetReader(torch.utils.data.Dataset):
     def __getitem__(self, item):
         """
         THIS FUNCTION ITERATE OVER THE DATASET BY GIVEN ITEM NO AND RETURNS FOLLOWINGS:
-        :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id
+        :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id, timesteps
         """
 
         feature = self.labels.iloc[item]
@@ -89,7 +112,17 @@ class PlanetReader(torch.utils.data.Dataset):
         else:
             label = feature.crop_id
 
-        return image_stack, label, mask, feature.fid
+        if self.temporal_dropout > 0:
+            dropout_timesteps = np.random.rand(image_stack.shape[0]) > self.temporal_dropout
+            image_stack = image_stack[dropout_timesteps]
+            timesteps = self.timesteps[dropout_timesteps]
+        else:
+            timesteps = self.timesteps
+
+        if self.return_timesteps:
+            return image_stack, label, mask, feature.fid, timesteps
+        else:
+            return image_stack, label, mask, feature.fid
 
     @staticmethod
     def _setup(input_dir, label_dir, npyfolder, min_area_to_ignore=1000):

@@ -1,0 +1,26 @@
+program: train.py
+method: grid
+metric:
+  goal: minimize
+  name: losses.valid
+parameters:
+  spatial_backbone:
+    value: pixelsetencoder
+  pse_sample_size:
+    values: [4, 16]
+  temporal_backbone:
+    value: ltae 
+  num_epochs:
+    value: 100
+  batch_size:
+    values: [64]
+  satellite:
+    value: s1_s2_planet_daily
+  lr:
+    values: [0.001, 0.0001]
+  s1_temporal_dropout:
+    values: [0.0, 0.2, 0.4]
+  s2_temporal_dropout:
+    values: [0.2, 0.4]
+  planet_temporal_dropout:
+    values: [0.2, 0.4]

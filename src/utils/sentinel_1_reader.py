@@ -14,6 +14,7 @@ import numpy as np
 import rasterio as rio
 import pdb
 import math
+from pathlib import Path
 from rasterio import features
 from tqdm import tqdm
 
@@ -31,7 +32,9 @@ class S1Reader(Dataset):
         transform=None,
         min_area_to_ignore=1000,
         selected_time_points=None,
-        filter=None
+        filter=None,
+        temporal_dropout=0.0,
+        return_timesteps=False,
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -54,6 +57,12 @@ class S1Reader(Dataset):
         self.npyfolder = input_dir.replace(".zip", "/time_series")
         self.labels = S1Reader._setup(input_dir, label_dir, self.npyfolder, min_area_to_ignore, filter)
 
+        with (Path(input_dir) / "timestamp.pkl").open("rb") as f:
+            self.timesteps = np.array(pickle.load(f))
+
+        self.temporal_dropout = temporal_dropout
+        self.return_timesteps = return_timesteps
+
     def __len__(self):
         """
         THIS FUNCTION RETURNS THE LENGTH OF DATASET
@@ -63,7 +72,7 @@ class S1Reader(Dataset):
     def __getitem__(self, item):
         """
         THIS FUNCTION ITERATE OVER THE DATASET BY GIVEN ITEM NO AND RETURNS FOLLOWINGS:
-        :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id
+        :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id, timesteps
         """
 
         feature = self.labels.iloc[item]
@@ -93,7 +102,17 @@ class S1Reader(Dataset):
         else:
             label = feature.crop_id
 
-        return image_stack, label, mask, feature.fid
+        if self.temporal_dropout > 0:
+            dropout_timesteps = np.random.rand(image_stack.shape[0]) > self.temporal_dropout
+            image_stack = image_stack[dropout_timesteps]
+            timesteps = self.timesteps[dropout_timesteps]
+        else:
+            timesteps = self.timesteps
+
+        if self.return_timesteps:
+            return image_stack, label, mask, feature.fid, timesteps
+        else:
+            return image_stack, label, mask, feature.fid
 
     @staticmethod
     def _setup(rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000, filter=None):

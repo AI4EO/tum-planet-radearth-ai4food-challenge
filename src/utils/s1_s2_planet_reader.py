@@ -28,6 +28,9 @@ class S1S2PlanetReader(Dataset):
         selected_time_points=None,
         include_cloud=False,
         filter=None,
+        s1_temporal_dropout=0.0,
+        s2_temporal_dropout=0.0,
+        planet_temporal_dropout=0.0,
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -50,26 +53,6 @@ class S1S2PlanetReader(Dataset):
             "This is deliberate to avoid interpolation and code changes."
         )
 
-        with (Path(s1_input_dir) / "timestamp.pkl").open("rb") as f:
-            s1_timesteps = pickle.load(f)
-
-        with (Path(s2_input_dir) / "timestamp.pkl").open("rb") as f:
-            s2_timesteps = pickle.load(f)
-
-        with (Path(planet_input_dir) / "collection.json").open("rb") as f:
-            planet_collection = json.load(f)
-
-        tzinfo = s1_timesteps[0].tzinfo
-        start_str, end_str = planet_collection["extent"]["temporal"]["interval"][0]
-        start = datetime.strptime(start_str, "%Y-%m-%dT%H:%M:%SZ")
-        end = datetime.strptime(end_str, "%Y-%m-%dT%H:%M:%SZ")
-        planet_timesteps = [
-            datetime.fromordinal(o).replace(tzinfo=tzinfo)
-            for o in range(start.toordinal(), end.toordinal() + 1)
-        ]
-
-        self.timesteps = planet_timesteps
-
         self.s1_reader = S1Reader(
             input_dir=s1_input_dir,
             label_dir=label_dir,
@@ -77,7 +60,9 @@ class S1S2PlanetReader(Dataset):
             transform=s1_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
-            filter=filter
+            filter=filter,
+            temporal_dropout=s1_temporal_dropout,
+            return_timesteps=True,
         )
 
         self.s2_reader = S2Reader(
@@ -88,7 +73,9 @@ class S1S2PlanetReader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
-            filter=filter
+            filter=filter,
+            temporal_dropout=s2_temporal_dropout,
+            return_timesteps=True,
         )
 
         self.planet_reader = PlanetReader(
@@ -98,10 +85,12 @@ class S1S2PlanetReader(Dataset):
             transform=planet_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
+            tzinfo=self.s1_reader.timesteps[0].tzinfo,
+            temporal_dropout=planet_temporal_dropout,
+            return_timesteps=True,
         )
 
-        self.s1_aligned_index = [self.nearest_ind(s1_timesteps, d) for d in planet_timesteps]
-        self.s2_aligned_index = [self.nearest_ind(s2_timesteps, d) for d in planet_timesteps]
+        self.timesteps = self.planet_reader.timesteps
 
         assert self.s1_reader.labels.drop("path", axis=1).equals(
             self.s2_reader.labels.drop("path", axis=1)
@@ -122,15 +111,31 @@ class S1S2PlanetReader(Dataset):
         return len(self.s1_reader.labels)
 
     def __getitem__(self, idx):
-        s1_image_stack, s1_label, _, s1_fid = self.s1_reader[idx]
-        s2_image_stack, s2_label, _, s2_fid = self.s2_reader[idx]
-        planet_image_stack, planet_label, planet_mask, planet_fid = self.planet_reader[idx]
+
+        s1_image_stack, s1_label, _, s1_fid, s1_timesteps = self.s1_reader[idx]
+        s2_image_stack, s2_label, _, s2_fid, s2_timesteps = self.s2_reader[idx]
+        (
+            planet_image_stack,
+            planet_label,
+            planet_mask,
+            planet_fid,
+            planet_timesteps,
+        ) = self.planet_reader[idx]
 
         assert s1_fid == s2_fid == planet_fid
         assert s1_label == s2_label == planet_label
 
-        s1_aligned = s1_image_stack[self.s1_aligned_index]
-        s2_aligned = s2_image_stack[self.s2_aligned_index]
+        # If returned timesteps do not match the timesteps of the S1, S2 and Planet data, that means
+        # temporal dropout is being used and the data needs to be realigned
+        s1_aligned_index = [self.nearest_ind(s1_timesteps, d) for d in planet_timesteps]
+        s2_aligned_index = [self.nearest_ind(s2_timesteps, d) for d in planet_timesteps]
+
+        s1_aligned = s1_image_stack[s1_aligned_index]
+        s2_aligned = s2_image_stack[s2_aligned_index]
         s1_s2_planet_image_stack = torch.cat((planet_image_stack, s2_aligned, s1_aligned), dim=1)
 
-        return s1_s2_planet_image_stack, planet_label, planet_mask, planet_fid
+        # pad with zeros to make the image stack of the same size
+        target = torch.zeros(len(self.timesteps), *s1_s2_planet_image_stack.shape[1:])
+        target[: len(planet_timesteps)] = s1_s2_planet_image_stack
+
+        return target, planet_label, planet_mask, planet_fid

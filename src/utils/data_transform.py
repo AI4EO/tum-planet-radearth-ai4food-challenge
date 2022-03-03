@@ -103,10 +103,21 @@ class EOTransformer:
             #     image_stack = np.fliplr(image_stack)
             #     mask = np.fliplr(mask)
 
+        # if self.is_train and self.temporal_augmentation and np.random.rand() < 0.8:
+        #     assert (
+        #         len(image_stack.shape) == 2
+        #     ), f"Expecting an image stack with shape (Temporal, Bands) but got shape {image_stack.shape}"
+
+        #     pdb.set_trace()
+        #     synthetic_image_stack = self.temporal_augmentation_model(image_stack)
+
+        #     return synthetic_image_stack, mask
+
         if return_unnormalized_numpy:
             return image_stack, mask
 
-        return self.normalize_and_torchify(image_stack, mask)
+        image_stack, mask = self.normalize_and_torchify(image_stack, mask)
+        return image_stack, mask
 
 
 class PlanetTransform(EOTransformer):
@@ -199,7 +210,6 @@ class Sentinel2Transform(EOTransformer):
     def transform(self, image_stack, mask=None):
 
         image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=True)
-
         if self.include_ndvi:
             nir = image_stack[:, 7]
             red = image_stack[:, 3]

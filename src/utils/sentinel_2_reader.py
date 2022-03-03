@@ -14,6 +14,7 @@ import geopandas as gpd
 import numpy as np
 import math
 import rasterio as rio
+from pathlib import Path
 from rasterio import features
 from tqdm import tqdm
 
@@ -32,16 +33,21 @@ class S2Reader(Dataset):
         min_area_to_ignore=1000,
         selected_time_points=None,
         include_cloud=False,
-        filter=None
+        filter=None,
+        temporal_dropout=0.0,
+        return_timesteps=False,
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
         :param input_dir: directory of input images in zip format
         :param label_dir: directory of ground-truth polygons in GeoJSON format
-        :param label_ids: an array of crop IDs in order. if the crop labels in GeoJSON data is not started from index 0 it can be used. Otherwise it is not required.
+        :param label_ids: an array of crop IDs in order. if the crop labels in GeoJSON data is not
+            started from index 0 it can be used. Otherwise it is not required.
         :param transform: data transformer function for the augmentation or data processing
-        :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a certain threshold. By default, threshold is 1000 m2
-        :param selected_time_points: If a sub set of the time series will be exploited, it can determine the index of those times in a given time series dataset
+        :param min_area_to_ignore: threshold m2 to eliminate small agricultural fields less than a
+            certain threshold. By default, threshold is 1000 m2
+        :param selected_time_points: If a sub set of the time series will be exploited,
+            it can determine the index of those times in a given time series dataset
 
         :return: None
         """
@@ -56,6 +62,12 @@ class S2Reader(Dataset):
             input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud=include_cloud, filter=filter
         )
 
+        with (Path(input_dir) / "timestamp.pkl").open("rb") as f:
+            self.timesteps = np.array(pickle.load(f))
+
+        self.temporal_dropout = temporal_dropout
+        self.return_timesteps = return_timesteps
+
     def __len__(self):
         """
         THIS FUNCTION RETURNS THE LENGTH OF DATASET
@@ -65,7 +77,7 @@ class S2Reader(Dataset):
     def __getitem__(self, item):
         """
         THIS FUNCTION ITERATE OVER THE DATASET BY GIVEN ITEM NO AND RETURNS FOLLOWINGS:
-        :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id
+        :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id, timesteps
         """
 
         feature = self.labels.iloc[item]
@@ -95,7 +107,17 @@ class S2Reader(Dataset):
         else:
             label = feature.crop_id
 
-        return image_stack, label, mask, feature.fid
+        if self.temporal_dropout > 0:
+            dropout_timesteps = np.random.rand(image_stack.shape[0]) > self.temporal_dropout
+            image_stack = image_stack[dropout_timesteps]
+            timesteps = self.timesteps[dropout_timesteps]
+        else:
+            timesteps = self.timesteps
+
+        if self.return_timesteps:
+            return image_stack, label, mask, feature.fid, timesteps
+        else:
+            return image_stack, label, mask, feature.fid
 
     @staticmethod
     def _setup(

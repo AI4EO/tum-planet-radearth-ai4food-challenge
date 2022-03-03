@@ -44,6 +44,9 @@ _, reader = load_reader(
     spatial_backbone=config["spatial_backbone"],
     min_area_to_ignore=0,
     train_or_test="test",
+    s1_temporal_dropout=0.0,
+    s2_temporal_dropout=0.0,
+    planet_temporal_dropout=0.0,
 )
 
 print("\u2713 Data loaded")

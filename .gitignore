@@ -4,6 +4,7 @@ venv
 data
 slurm
 model_dump
+temporal_augment_model_dump
 wandb
 __pycache__
 submissions
