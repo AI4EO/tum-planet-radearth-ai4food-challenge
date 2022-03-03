@@ -27,6 +27,7 @@ class S1S2PlanetReader(Dataset):
         min_area_to_ignore=1000,
         selected_time_points=None,
         include_cloud=False,
+        filter=None,
         s1_temporal_dropout=0.0,
         s2_temporal_dropout=0.0,
         planet_temporal_dropout=0.0,
@@ -59,6 +60,7 @@ class S1S2PlanetReader(Dataset):
             transform=s1_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
+            filter=filter,
             temporal_dropout=s1_temporal_dropout,
             return_timesteps=True,
         )
@@ -71,6 +73,7 @@ class S1S2PlanetReader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
+            filter=filter,
             temporal_dropout=s2_temporal_dropout,
             return_timesteps=True,
         )
@@ -96,6 +99,8 @@ class S1S2PlanetReader(Dataset):
             self.planet_reader.labels.drop("path", axis=1)
         )
         self.labels = self.s1_reader.labels.drop("path", axis=1)
+        
+        assert len(self.s1_reader.labels) == len(self.s2_reader.labels)
 
     @staticmethod
     def nearest_ind(items, pivot):

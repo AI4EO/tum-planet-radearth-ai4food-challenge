@@ -204,6 +204,7 @@ class TemporalEncoder(nn.Module):
                 len_max_seq=sequencelength,
                 positions=None,
                 return_att=False,
+                mlp4=[128, 64, 32, num_classes],
             )
 
         self.modelname = backbone

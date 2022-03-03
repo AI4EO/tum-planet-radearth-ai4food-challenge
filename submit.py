@@ -28,9 +28,15 @@ print(f"Creating: {name}.tar.gz ")
 
 print(config)
 
+if config['competition'] == 'germany':
+    pos = '33N_17E_243N'
+elif config['competition'] == 'south_africa':
+    pos = "34S_20E_259N"
+
 _, reader = load_reader(
+    competition=config['competition'],
     satellite=config["satellite"],
-    pos="34S_20E_259N",
+    pos=pos,
     include_bands=config["include_bands"],
     include_cloud=config["include_cloud"],
     include_ndvi=config["include_ndvi"],
@@ -101,7 +107,7 @@ with torch.no_grad():
 
 output_frame = pd.DataFrame.from_dict(output_list)
 
-submission_path = Path(f"submissions/{name}/34S-20E-259N-2017-submission-{name}.json")
+submission_path = Path(f"submissions/{name}/{pos}-submission-{name}.json")
 submission_path.parent.mkdir(parents=True, exist_ok=True)
 output_frame.to_json(submission_path)
 

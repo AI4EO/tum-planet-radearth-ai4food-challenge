@@ -33,6 +33,7 @@ class S2Reader(Dataset):
         min_area_to_ignore=1000,
         selected_time_points=None,
         include_cloud=False,
+        filter=None,
         temporal_dropout=0.0,
         return_timesteps=False,
     ):
@@ -58,7 +59,7 @@ class S2Reader(Dataset):
 
         self.npyfolder = input_dir.replace(".zip", "/time_series")
         self.labels = S2Reader._setup(
-            input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud=include_cloud
+            input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud=include_cloud, filter=filter
         )
 
         with (Path(input_dir) / "timestamp.pkl").open("rb") as f:
@@ -95,6 +96,7 @@ class S2Reader(Dataset):
             raise
 
         if self.data_transform is not None:
+            assert np.argwhere(np.isnan(image_stack)).size == 0 and np.argwhere(np.isinf(image_stack)).size == 0
             image_stack, mask = self.data_transform(image_stack, mask)
 
         if self.selected_time_points is not None:
@@ -124,6 +126,7 @@ class S2Reader(Dataset):
         npyfolder,
         min_area_to_ignore=1000,
         include_cloud=False,
+        filter=None
     ):
         """
         THIS FUNCTION PREPARES THE PLANET READER BY SPLITTING AND RASTERIZING EACH CROP FIELD AND SAVING INTO SEPERATE FILES FOR SPEED UP THE FURTHER USE OF DATA.
@@ -145,6 +148,8 @@ class S2Reader(Dataset):
             minx, miny, maxx, maxy = bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y
 
         labels = gpd.read_file(labelgeojson)
+        if filter is not None:
+            labels = labels[~labels.fid.isin(filter)]
         # project to same coordinate reference system (crs) as the imagery
         ignore = labels.geometry.area > min_area_to_ignore
         print(
