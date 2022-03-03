@@ -62,6 +62,7 @@ class SpatiotemporalModel(nn.Module):
         sequencelength=365,
         pretrained_spatial=True,
         ta_model_path=None,
+        ta_probability=0.0,
         device="cpu",
     ):
         super(SpatiotemporalModel, self).__init__()
@@ -79,6 +80,7 @@ class SpatiotemporalModel(nn.Module):
             num_classes=num_classes,
             sequencelength=sequencelength,
             ta_model_path=ta_model_path,
+            ta_probability=ta_probability,
             device=device,
         )
 
@@ -163,7 +165,16 @@ class SpatialEncoder(torch.nn.Module):
 
 
 class TemporalEncoder(nn.Module):
-    def __init__(self, backbone, input_dim, num_classes, sequencelength, ta_model_path, device):
+    def __init__(
+        self,
+        backbone,
+        input_dim,
+        num_classes,
+        sequencelength,
+        ta_model_path,
+        device,
+        ta_probability=0.0,
+    ):
         super(TemporalEncoder, self).__init__()
         """
         A wrapper around Breizhcrops models for time series classification
@@ -210,6 +221,7 @@ class TemporalEncoder(nn.Module):
         self.modelname = backbone
 
         self.temporal_augmentation_model = None
+        self.ta_probability = ta_probability
 
         if ta_model_path:
             from src.temporal_augmentor import TemporalAugmentor
@@ -234,7 +246,11 @@ class TemporalEncoder(nn.Module):
     def forward(self, x):
         if type(x) == tuple:
             x, _ = x
-        if self.temporal_augmentation_model and self.model.training and (0.8 > np.random.rand()):
+        if (
+            self.temporal_augmentation_model
+            and self.model.training
+            and (self.ta_probability > np.random.rand())
+        ):
             x = self.temporal_augmentation_model(x, training=False)
 
         return self.model(x)

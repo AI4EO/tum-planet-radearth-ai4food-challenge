@@ -46,12 +46,13 @@ arg_parser.add_argument("--gp_loss_weight", type=float, default=0.01)
 arg_parser.add_argument("--gp_inference_index", type=int, default=10)
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
+arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
 arg_parser.set_defaults(enable_wandb=True)
 
 config = arg_parser.parse_args().__dict__
 
 # Random seeds
-assert config["satellite"] in ["sentinel_2", "planet_daily"]
+assert config["satellite"] in ["sentinel_2", "planet_daily", "planet_5day"]
 assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
 assert config["split_by"] in [None, "latitude", "longitude"]
 
@@ -68,6 +69,7 @@ kwargs = dict(
     spatial_backbone=config["spatial_backbone"],
     min_area_to_ignore=1000,
     train_or_test="train",
+    planet_temporal_dropout=config["planet_temporal_dropout"],
 )
 if config["pos"] == "both":
     label_names_258, reader_258 = load_reader(pos="34S_19E_258N", **kwargs)
@@ -147,7 +149,7 @@ variational_elbo = gpytorch.mlls.VariationalELBO(
 
 def gp_loss_func(gp_y_pred: List[torch.Tensor], y_true: torch.Tensor):
     gp_loss_sum = 0
-    predicted_seq_len = y_true.shape[1] - 1
+    predicted_seq_len = len(gp_y_pred)
     for i in range(predicted_seq_len):
         gp_loss_sum -= variational_elbo(gp_y_pred[i], y_true[:, i + 1].transpose(0, 1)).sum()
     return gp_loss_sum / predicted_seq_len

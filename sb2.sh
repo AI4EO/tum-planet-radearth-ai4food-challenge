@@ -2,7 +2,7 @@
 
 #SBATCH --output=slurm/%j.out                              
 #SBATCH --error=slurm/%j.out                                 
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --qos=default
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G

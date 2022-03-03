@@ -54,7 +54,7 @@ arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
 arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
 arg_parser.add_argument("--temporal_backbone", type=str, default="tempcnn")
 arg_parser.add_argument("--image_size", type=int, default=32)
-arg_parser.add_argument("--save_model_threshold", type=float, default=0.9)
+arg_parser.add_argument("--save_model_threshold", type=float, default=0.7)
 arg_parser.add_argument("--pse_sample_size", type=int, default=32)
 arg_parser.add_argument("--validation_split", type=float, default=0.2)
 arg_parser.add_argument("--split_by", type=str, default="longitude", help="latitude or longitude")
@@ -70,6 +70,7 @@ arg_parser.add_argument("--s2_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--lr_scheduler", type=str, default="none")
 arg_parser.add_argument("--ta_model_path", type=str, default="")
+arg_parser.add_argument("--ta_probability", type=float, default=0.0)
 
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
@@ -178,6 +179,7 @@ model = SpatiotemporalModel(
     num_classes=len(label_names),
     sequencelength=config["sequence_length"],
     ta_model_path=config["ta_model_path"],
+    ta_probability=config["ta_probability"],
     device=DEVICE,
 )
 

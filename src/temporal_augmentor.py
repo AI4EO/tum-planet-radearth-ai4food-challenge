@@ -56,7 +56,7 @@ class TemporalAugmentor(nn.Module):
 
             input = x[:, i : i + 1, :]
 
-            if training:
+            if training and (input != 0).all():
                 # Make prediction of next time step with gp (for training)
                 gp_pred = self.gp_layer(input.permute(2, 0, 1))
                 gp_output_list.append(gp_pred)
@@ -65,6 +65,9 @@ class TemporalAugmentor(nn.Module):
                 # Use the input to make the next lstm prediction
                 lstm_pred, hidden_tuple = self.lstm(input, hidden_tuple)
                 lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
+                if not training:
+                    inference_output_list.append(input)
+
             else:
                 if i == self.input_timesteps:
                     # Use the last lstm prediction from the real sequence as the first output step
@@ -97,5 +100,5 @@ class TemporalAugmentor(nn.Module):
             assert len(lstm_output_list) == self.output_timesteps
             return torch.cat(lstm_output_list, dim=1), gp_output_list
         else:
-            assert len(inference_output_list) == self.output_timesteps
+            assert len(inference_output_list) == (self.input_timesteps + self.output_timesteps)
             return torch.cat(inference_output_list, dim=1)
