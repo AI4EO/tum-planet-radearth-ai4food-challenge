@@ -1,0 +1,13 @@
+program: train_ta.py
+method: grid
+metric:
+  goal: minimize
+  name: losses.valid_lstm
+parameters:
+  lstm_lr:
+    values: [0.01, 0.001, 0.0001]
+  lstm_hidden_size:
+    values: [128, 256, 512, 1024]
+  lstm_dropout:
+    values: [0.1, 0.2, 0.3]
+  
