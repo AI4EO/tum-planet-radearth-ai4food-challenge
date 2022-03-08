@@ -102,9 +102,7 @@ class S1S2Reader(Dataset):
         assert s1_fid == s2_fid
         assert s1_label == s2_label
 
-        realign = (
-            s1_timesteps != self.s1_reader.timesteps or s2_timesteps != self.s2_reader.timesteps
-        )
+        realign = (s1_timesteps != self.s1_reader.timesteps).any() or (s2_timesteps != self.s2_reader.timesteps).any()
 
         timesteps = self.timesteps
         if self.alignment == "1to2":
