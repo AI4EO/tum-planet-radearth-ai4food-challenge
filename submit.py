@@ -33,7 +33,7 @@ print(config)
 if "germany" in config["competition"]:
     config["competition"] = "germany"
     pos = "33N_17E_243N"
-    groundtruth = "/cmlscratch/hkjoo/repo/ai4eo/data/dlr_fusion_competition_germany_test_labels/dlr_fusion_competition_germany_test_labels_33N_17E_243N/crops_test_2019.geojson"
+    groundtruth = "/cmlscratch/hkjoo/repo/ai4eo/data/dlr_fusion_competition_germany_test_labels/dlr_fusion_competition_germany_test_labels_33N_17E_243N/labels.geojson"
 elif "south_africa" in config["competition"]:
     config[
         "competition"
