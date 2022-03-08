@@ -160,6 +160,7 @@ def train_epoch_ta(
     device="cpu",
     gp_loss_weight=0.01,
     gp_enabled=True,
+    debug=False,
 ):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR TRAINING
@@ -181,32 +182,35 @@ def train_epoch_ta(
             lstm_optimizer.zero_grad()
             if gp_enabled:
                 gp_optimizer.zero_grad()
+
             x, _, _, _ = batch
             model_input = x.to(device)
-            lstm_y_true = x[:, 1:].to(device)
             if gp_enabled:
                 lstm_y_pred, gp_y_pred = model.forward(model_input)
                 gp_loss = gp_loss_func(gp_y_pred, x.to(device))
-                lstm_loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
+                lstm_loss = lstm_loss_func(lstm_y_pred, x.to(device))
                 loss = lstm_loss + (gp_loss_weight * gp_loss)
             else:
                 lstm_y_pred = model.forward(model_input)
-                loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
+                loss = lstm_loss_func(lstm_y_pred, x.to(device))
 
             loss.backward()
             lstm_optimizer.step()
             if gp_enabled:
                 gp_optimizer.step()
-                gp_losses.append(gp_loss)
-                lstm_losses.append(lstm_loss)
+                gp_losses.append(gp_loss.detach().item())
+                lstm_losses.append(lstm_loss.detach().item())
             iterator.set_description(f"train loss={loss:.2f}")
-            losses.append(loss)
+            losses.append(loss.detach().item())
+
+            if debug:
+                break
 
     with torch.no_grad():
         if gp_enabled:
-            return (torch.mean(torch.stack(ls)) for ls in [losses, lstm_losses, gp_losses])
+            return (np.array(ls).mean() for ls in [losses, lstm_losses, gp_losses])
         else:
-            return torch.mean(torch.stack(losses))
+            return np.array(losses).mean()
 
 
 def validation_epoch_ta(
@@ -217,6 +221,7 @@ def validation_epoch_ta(
     device="cpu",
     gp_loss_weight=0.01,
     gp_enabled=True,
+    debug=False,
 ):
     """
     THIS FUNCTION ITERATES A SINGLE EPOCH FOR VALIDATION
@@ -237,22 +242,25 @@ def validation_epoch_ta(
             for idx, batch in iterator:
                 x, _, _, _ = batch
                 model_input = x.to(device)
-                lstm_y_true = x[:, 1:].to(device)
                 if gp_enabled:
                     lstm_y_pred, gp_y_pred = model.forward(model_input)
                     gp_loss = gp_loss_func(gp_y_pred, x.to(device))
-                    lstm_loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
+                    lstm_loss = lstm_loss_func(lstm_y_pred, x.to(device))
                     loss = lstm_loss + (gp_loss_weight * gp_loss)
 
-                    lstm_losses.append(lstm_loss)
-                    gp_losses.append(gp_loss)
+                    lstm_losses.append(lstm_loss.item())
+                    gp_losses.append(gp_loss.item())
                 else:
                     lstm_y_pred = model.forward(model_input)
-                    loss = lstm_loss_func(lstm_y_pred, lstm_y_true)
+                    loss = lstm_loss_func(lstm_y_pred, x.to(device))
 
                 iterator.set_description(f"valid loss={loss:.2f}")
-                losses.append(loss)
+                losses.append(loss.item())
+
+                if debug:
+                    break
+
         if gp_enabled:
-            return (torch.mean(torch.stack(ls)) for ls in [losses, lstm_losses, gp_losses])
+            return (np.array(ls).mean() for ls in [losses, lstm_losses, gp_losses])
         else:
-            return torch.mean(torch.stack(losses))
+            return np.array(losses).mean()
