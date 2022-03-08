@@ -1,6 +1,7 @@
 from pathlib import Path
 from torch.optim import Adam, SGD
 from typing import List
+from torch import nn
 
 import argparse
 import gpytorch
