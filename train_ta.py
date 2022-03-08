@@ -1,5 +1,4 @@
 from pathlib import Path
-from torch import nn
 from torch.optim import Adam, SGD
 from typing import List
 
@@ -44,8 +43,8 @@ arg_parser.add_argument("--split_by", type=str, default="longitude", help="latit
 arg_parser.add_argument("--lstm_hidden_size", type=int, default=128)
 arg_parser.add_argument("--lstm_dropout", type=float, default=0.1)
 arg_parser.add_argument("--lstm_layers", type=int, default=1)
-arg_parser.add_argument("--input_timesteps", type=int, default=None)
-arg_parser.add_argument("--save_model_threshold", type=float, default=1.0)
+arg_parser.add_argument("--input_timesteps", type=int, default=100)
+arg_parser.add_argument("--save_model_threshold", type=float, default=0.2)
 arg_parser.add_argument("--gp_loss_weight", type=float, default=0.01)
 arg_parser.add_argument("--gp_inference_index", type=int, default=10)
 arg_parser.add_argument("--gp_interval", type=int, default=1)
@@ -71,6 +70,7 @@ assert config["split_by"] in [None, "latitude", "longitude"]
 assert config["loss"] in ["SmoothL1", "MSE", "L1"]
 
 config["normalize"] = True
+config["gp_enabled"] = False
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Data loaders
@@ -311,7 +311,26 @@ for epoch in range(config["num_epochs"] + 1):
     to_log = {
         "losses": losses,
         "epoch": epoch,
-        "lstm_predictions_plot": plot_preds(title="LSTM only", gp_indexes=[], model=model, x=x),
+        "lstm_predictions_plot": plot_preds(title="LSTM only", model=model, x=x),
+        "lstm_predictions_dropout_plot": plot_preds(
+            title="LSTM with dropout", model=model, x=x, preds_with_dropout=3
+        ),
+        "lstm_predictions_perturb_plot": plot_preds(
+            title="LSTM with perturbation (10 random)",
+            model=model,
+            x=x,
+            perturb_h_indexes=random.sample(range(0, 144), 10),
+            perturb_amount=0.5,
+            predict_amount=3,
+        ),
+        "lstm_predictions_perturb_and_dropout_plot": plot_preds(
+            title="LSTM with dropout and perturbation (10 random)",
+            model=model,
+            x=x,
+            preds_with_dropout=3,
+            perturb_h_indexes=random.sample(range(0, 144), 10),
+            perturb_amount=0.5,
+        ),
     }
     if gp_enabled:
         to_log["gp_10th_plot"] = plot_preds(title="GP at 10th", gp_indexes=[10], model=model, x=x)

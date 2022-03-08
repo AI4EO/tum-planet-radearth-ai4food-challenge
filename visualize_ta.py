@@ -60,23 +60,18 @@ def plot_preds(
             preds.append(pred_np)
 
         if preds_with_dropout > 0:
-            preds_np_dropout = []
 
             # Enable dropout
             if model.lstm_type == "unrolled":
                 print("Enabling dropout between LSTM cells")
                 model.lstm.train()
             elif model.lstm_type == "pytorch":
-                print("Enabling dropout between LSTM layers")
-                for m in model.modules():
-                    if m.__class__.__name__.startswith("Dropout"):
-                        m.train()
-                        print("Enabled one layer of dropout")
+                raise NotImplementedError("Enabling Dropout not implemented for pytorch lstm ")
 
             # Compute preds with dropout
             for i in range(preds_with_dropout):
                 pred_np = model(x, training=False).cpu().numpy()
-                preds_np_dropout.append(pred_np)
+                preds.append(pred_np)
 
             if model.lstm_type == "unrolled":
                 model.lstm.eval()
@@ -99,14 +94,6 @@ def plot_preds(
 
             ax[0].plot(pred_nir, label=f"Generated NIR {j}")
             ax[1].plot(pred_ndvi, label=f"Generated NDVI {j}")
-
-        for j, pred_np in enumerate(preds_np_dropout):
-
-            pred_nir = get_nir(pred_np[i])
-            pred_ndvi = get_ndvi(pred_np[i])
-
-            ax[0].plot(pred_nir, label=f"Generated NIR dropout {j}")
-            ax[1].plot(pred_ndvi, label=f"Generated NDVI dropout {j}")
 
         ax[0].axvline(x=input_timesteps, label="Predictions start", linestyle="--", color="gray")
         ax[1].axvline(x=input_timesteps, label="Predictions start", linestyle="--", color="gray")
