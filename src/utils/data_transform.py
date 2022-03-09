@@ -37,13 +37,19 @@ class EOTransformer:
         self.is_train = is_train
 
     def normalize_and_torchify(self, image_stack, mask=None):
-        image_stack = image_stack * 1e-4
+        # image_stack = image_stack * 1e-4
 
         # z-normalize
         if self.normalize:
-            image_stack -= 0.1014 + np.random.normal(scale=0.01)
-            image_stack /= 0.1171 + np.random.normal(scale=0.01)
+            image_stack = image_stack * 1e-4
+            image_stack -= 0.1014  # + np.random.normal(scale=0.01)
+            image_stack /= 0.1171  # + np.random.normal(scale=0.01)
 
+        return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(
+            np.ascontiguousarray(mask)
+        )
+
+    def torchify(self, image_stack, mask=None):
         return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(
             np.ascontiguousarray(mask)
         )
@@ -81,6 +87,9 @@ class EOTransformer:
             else:
                 image_stack = image_stack[:, :, mask > 0]
             mask = -1
+
+        elif self.spatial_backbone == "as_is":
+            return image_stack, mask
 
         else:  # crop/pad image to fixed size + augmentations: T, D, H, W = image_stack.shape
             if image_stack.shape[2] >= self.image_size and image_stack.shape[3] >= self.image_size:
@@ -125,6 +134,10 @@ class PlanetTransform(EOTransformer):
     THIS CLASS INHERITS EOTRANSFORMER FOR DATA AUGMENTATION IN THE PLANET DATA
     """
 
+    # South Africa values
+    per_band_mean = np.array([580.4186, 852.98376, 1136.9423, 2761.0286])
+    per_band_std = np.array([179.95744, 209.66647, 384.34073, 476.9446])
+
     def __init__(
         self,
         include_bands=True,
@@ -139,6 +152,9 @@ class PlanetTransform(EOTransformer):
 
         image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=True)
 
+        if self.normalize:
+            image_stack = (image_stack - self.per_band_mean) / self.per_band_std
+
         if self.include_ndvi:
             red = image_stack[:, 2]
             nir = image_stack[:, 3]
@@ -152,7 +168,7 @@ class PlanetTransform(EOTransformer):
         elif not self.include_bands and self.include_ndvi:
             image_stack = ndvi
 
-        return self.normalize_and_torchify(image_stack, mask)
+        return self.torchify(image_stack, mask)
 
 
 class Sentinel1Transform(EOTransformer):

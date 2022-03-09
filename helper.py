@@ -38,6 +38,7 @@ def load_reader(
     s1_temporal_dropout: float = 0.0,
     s2_temporal_dropout: float = 0.0,
     planet_temporal_dropout: float = 0.0,
+    normalize: bool = True,
 ):
     if competition == "south_africa":
         country = "ref_fusion_competition_south_africa"
@@ -75,7 +76,7 @@ def load_reader(
         image_size=image_size,
         pse_sample_size=pse_sample_size,
         spatial_backbone=spatial_backbone,
-        normalize=True,
+        normalize=normalize,
         is_train=train_or_test == "train",
     )
 
