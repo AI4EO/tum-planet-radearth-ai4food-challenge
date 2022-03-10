@@ -1,12 +1,12 @@
 from torch import nn
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import gpytorch
 import numpy as np
 import pdb
 import torch
 
-from src.utils.unrolled_lstm import UnrolledLSTM
+from src.utils.unrolled_lstm import UnrolledLSTM, SimpleLSTM
 from src.utils.gp_models import GPRegressionLayer1
 
 
@@ -48,6 +48,13 @@ class TemporalAugmentor(nn.Module):
                 dropout=dropout,
                 batch_first=True,
             )
+        elif lstm_type == "simple":
+            self.lstm = SimpleLSTM(
+                input_size=num_bands,
+                hidden_size=hidden_size,
+                dropout=dropout,
+                num_layers=lstm_layers,
+            )
         else:
             raise ValueError(f"Unknown LSTM type {lstm_type}")
         self.num_bands = num_bands
@@ -80,39 +87,52 @@ class TemporalAugmentor(nn.Module):
             gp_output_list.append(gp_pred)
         return gp_output_list
 
-    def lstm_output_using_x(self, x, hidden_tuple=None):
+    def lstm_output_using_x(self, x, h=None, c=None):
         lstm_output_list = []
         for i in range(x.shape[1]):
-            lstm_input = x[:, i : i + 1, :]
-            lstm_pred, hidden_tuple = self.lstm(lstm_input, hidden_tuple)
-            if self.lstm_type == "pytorch":
-                lstm_pred = self.to_bands(lstm_pred)
+            if self.lstm_type == "simple":
+                lstm_pred, (h, c) = self.lstm(x[:, i], h, c)
+                lstm_pred = lstm_pred.unsqueeze(axis=1)
+                # lstm_pred = self.to_bands(h).unsqueeze(axis=1)
             else:
-                lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
-            assert lstm_input.shape == lstm_pred.shape
-            lstm_output_list.append(lstm_pred)
-        return lstm_output_list, hidden_tuple
+                lstm_input = x[:, i : i + 1]
+                if h is None and c is None:
+                    lstm_pred, (h, c) = self.lstm(lstm_input)
+                else:
+                    lstm_pred, (h, c) = self.lstm(lstm_input, (h, c))
 
-    def lstm_output_using_auto_regression(self, timesteps, input, hidden_tuple=None):
+                if self.lstm_type == "pytorch":
+                    lstm_pred = self.to_bands(lstm_pred)
+                else:
+                    lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
+                assert lstm_input.shape == lstm_pred.shape
+            lstm_output_list.append(lstm_pred)
+        return lstm_output_list, (h, c)
+
+    def lstm_output_using_auto_regression(self, timesteps, input, h=None, c=None):
         lstm_output_list = [input]
         for i in range(timesteps):
-            lstm_pred, hidden_tuple = self.lstm(lstm_output_list[-1], hidden_tuple)
-            if self.lstm_type == "pytorch":
-                lstm_pred = self.to_bands(lstm_pred)
+            if self.lstm_type == "simple":
+                lstm_pred, (h, c) = self.lstm(lstm_output_list[-1][:, 0], h, c)
+                lstm_pred = lstm_pred.unsqueeze(axis=1)
+                # lstm_pred = self.to_bands(h).unsqueeze(axis=1)
             else:
-                lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
+                if h is None and c is None:
+                    lstm_pred, (h, c) = self.lstm(lstm_output_list[-1])
+                else:
+                    lstm_pred, (h, c) = self.lstm(lstm_output_list[-1], (h, c))
+                if self.lstm_type == "pytorch":
+                    lstm_pred = self.to_bands(lstm_pred)
+                else:
+                    lstm_pred = self.to_bands(torch.transpose(lstm_pred[0, :, :, :], 0, 1))
+
             lstm_output_list.append(lstm_pred)
             with torch.no_grad():
                 if not self.training and i in self.perturb_h_indexes:
-                    new_h0 = hidden_tuple[0] + (
-                        self.perturb_amount * torch.randn_like(hidden_tuple[0]).to(self.device)
-                    )
-                    new_h1 = hidden_tuple[1] + (
-                        self.perturb_amount * torch.randn_like(hidden_tuple[1]).to(self.device)
-                    )
-                    hidden_tuple = (new_h0, new_h1)
+                    h[0] += self.perturb_amount * torch.randn_like(h[0]).to(self.device)
+                    c[0] += self.perturb_amount * torch.randn_like(c[0]).to(self.device)
 
-        return lstm_output_list[1:], hidden_tuple
+        return lstm_output_list[1:], (h, c)
 
     def forward_train(self, x, input_timesteps):
         """Forward pass for training"""
@@ -120,14 +140,13 @@ class TemporalAugmentor(nn.Module):
         if self.teacher_forcing:
             lstm_output_list, _ = self.lstm_output_using_x(x[:, :-1])
         else:
-            lstm_output_list_using_x, last_hidden_tuple = self.lstm_output_using_x(
-                x=x[:, :input_timesteps]
-            )
+            lstm_output_list_using_x, (h, c) = self.lstm_output_using_x(x=x[:, :input_timesteps])
             remaining_timesteps = seq_length - input_timesteps - 1
             lstm_output_list_using_self, _ = self.lstm_output_using_auto_regression(
                 timesteps=remaining_timesteps,
                 input=x[:, input_timesteps : input_timesteps + 1],
-                hidden_tuple=last_hidden_tuple,
+                h=h,
+                c=c,
             )
 
             lstm_output_list = [x[:, 0:1]] + lstm_output_list_using_x + lstm_output_list_using_self
@@ -143,15 +162,14 @@ class TemporalAugmentor(nn.Module):
         seq_length = x.shape[1]
         remaining_timesteps = seq_length - input_timesteps - 1
         # inference_output_list = [x[:, t : t + 1, :] for t in range(input_timesteps)]
-        lstm_output_list, last_hidden_tuple = self.lstm_output_using_x(
-            x[:, :input_timesteps], hidden_tuple=None
-        )
+        lstm_output_list, (h, c) = self.lstm_output_using_x(x[:, :input_timesteps])
         inference_output_list = [x[:, 0:1]]
         inference_output_list += lstm_output_list
         lstm_output_list, _ = self.lstm_output_using_auto_regression(
             timesteps=remaining_timesteps,
             input=x[:, input_timesteps : input_timesteps + 1, :],
-            hidden_tuple=last_hidden_tuple,
+            h=h,
+            c=c,
         )
 
         inference_output_list += lstm_output_list
@@ -163,9 +181,7 @@ class TemporalAugmentor(nn.Module):
     def forward_inference_lstm_gp(self, x, input_timesteps):
         """Forward pass using LSTM and GP"""
         seq_length = x.shape[1]
-        lstm_output_list, last_hidden_tuple = self.lstm_output_using_x(
-            x[:, :input_timesteps], hidden_tuple=None
-        )
+        lstm_output_list, (h, c) = self.lstm_output_using_x(x[:, :input_timesteps])
 
         inference_output_list = [x[:, 0:1]] + lstm_output_list
         # inference_output_list = [x[:, t : t + 1, :] for t in range(input_timesteps)]
@@ -187,15 +203,13 @@ class TemporalAugmentor(nn.Module):
                 gp_output_list = torch.tensor_split(gp_pred_reshaped, self.gp_interval, dim=1)
                 # Generate next hidden tuple using GP outputs
                 lstm_input = torch.cat(gp_output_list, dim=1)
-                _, last_hidden_tuple = self.lstm_output_using_x(lstm_input, last_hidden_tuple)
+                _, (h, c) = self.lstm_output_using_x(lstm_input, h=h, c=c)
 
                 inference_output_list += gp_output_list
             else:
                 # Use last timestep as input to LSTM
-                lstm_output_list, last_hidden_tuple = self.lstm_output_using_auto_regression(
-                    timesteps=self.gp_interval,
-                    input=inference_output_list[-1],
-                    hidden_tuple=last_hidden_tuple,
+                lstm_output_list, (h, c) = self.lstm_output_using_auto_regression(
+                    timesteps=self.gp_interval, input=inference_output_list[-1], h=h, c=c
                 )
 
                 inference_output_list += lstm_output_list
@@ -203,7 +217,7 @@ class TemporalAugmentor(nn.Module):
         if len(inference_output_list) < seq_length:
             remaining_timesteps = seq_length - len(inference_output_list)
             inference_output_list += self.lstm_output_using_auto_regression(
-                remaining_timesteps, inference_output_list[-1], last_hidden_tuple
+                remaining_timesteps, inference_output_list[-1], h=h, c=c
             )
         elif len(inference_output_list) > seq_length:
             inference_output_list = inference_output_list[:seq_length]
