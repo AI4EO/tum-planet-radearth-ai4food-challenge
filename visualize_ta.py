@@ -62,7 +62,7 @@ def plot_preds(
         if preds_with_dropout > 0:
 
             # Enable dropout
-            if model.lstm_type == "unrolled":
+            if model.lstm_type == "unrolled" or model.lstm_type == "simple":
                 print("Enabling dropout between LSTM cells")
                 model.lstm.train()
             elif model.lstm_type == "pytorch":
