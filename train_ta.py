@@ -56,7 +56,7 @@ arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--plot_amount", type=int, default=3)
 arg_parser.add_argument("--disable_gp", dest="gp_enabled", action="store_false")
 arg_parser.add_argument("--use_teacher_forcing", dest="teacher_forcing", action="store_true")
-arg_parser.add_argument("--lstm_type", type=str, default="unrolled")
+arg_parser.add_argument("--lstm_type", type=str, default="simple")
 arg_parser.set_defaults(gp_enabled=True)
 arg_parser.set_defaults(enable_wandb=True)
 arg_parser.set_defaults(teacher_forcing=False)
@@ -272,10 +272,10 @@ for epoch in range(config["num_epochs"] + 1):
 
     print(f"INFO: epoch {epoch}: train_loss {train_loss:.2f}, valid_loss {valid_loss:.2f} ")
 
-    if not config["enable_wandb"]:
+    if not config["enable_wandb"] or config["debug"] and epoch % 10 != 0:
         continue
 
-    if config["save_model_threshold"] > valid_loss:
+    if config["save_model_threshold"] > valid_loss and not config["debug"]:
         model_path = f"temporal_augment_model_dump/{run.id}/{epoch}.pth"
         Path(model_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -313,10 +313,14 @@ for epoch in range(config["num_epochs"] + 1):
         "losses": losses,
         "epoch": epoch,
         "lstm_predictions_plot": plot_preds(title="LSTM only", model=model, x=x),
-        "lstm_predictions_dropout_plot": plot_preds(
-            title="LSTM with dropout", model=model, x=x, preds_with_dropout=3
-        ),
-        "lstm_predictions_perturb_plot": plot_preds(
+    }
+
+    # if not config["debug"]:
+    to_log["lstm_predictions_dropout_plot"] = (
+        plot_preds(title="LSTM with dropout", model=model, x=x, preds_with_dropout=3),
+    )
+    to_log["lstm_predictions_perturb_plot"] = (
+        plot_preds(
             title="LSTM with perturbation (10 random)",
             model=model,
             x=x,
@@ -324,7 +328,9 @@ for epoch in range(config["num_epochs"] + 1):
             perturb_amount=0.5,
             predict_amount=3,
         ),
-        "lstm_predictions_perturb_and_dropout_plot": plot_preds(
+    )
+    to_log["lstm_predictions_perturb_and_dropout_plot"] = (
+        plot_preds(
             title="LSTM with dropout and perturbation (10 random)",
             model=model,
             x=x,
@@ -332,7 +338,8 @@ for epoch in range(config["num_epochs"] + 1):
             perturb_h_indexes=random.sample(range(0, 144), 10),
             perturb_amount=0.5,
         ),
-    }
+    )
+
     if gp_enabled:
         to_log["gp_10th_plot"] = plot_preds(title="GP at 10th", gp_indexes=[10], model=model, x=x)
         to_log["gp_5_random_plot"] = plot_preds(
