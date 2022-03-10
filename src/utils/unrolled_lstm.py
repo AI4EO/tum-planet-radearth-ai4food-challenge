@@ -5,6 +5,52 @@ from torch import nn
 
 from typing import Tuple, Optional
 
+import pdb
+
+
+class SimpleLSTM(nn.Module):
+    def __init__(
+        self, input_size: int, hidden_size: int, num_layers: int = 1, dropout: float = 0.0
+    ):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.cells = nn.ModuleList(
+            [nn.LSTMCell(hidden_size, hidden_size) for _ in range(num_layers)]
+        )
+
+        self.dropout = VariationalDropout(dropout)
+
+        self.in_layer = nn.Linear(input_size, hidden_size)
+        self.out_layer = nn.Linear(hidden_size, input_size)
+
+    def forward(self, x, hx=None, cx=None):
+        if hx is None and cx is None:
+            # Set initial hidden and cell states to zeros
+            hx = [
+                torch.zeros(x.shape[0], self.hidden_size, device=x.device)
+                for _ in range(self.num_layers)
+            ]
+            cx = [
+                torch.zeros(x.shape[0], self.hidden_size, device=x.device)
+                for _ in range(self.num_layers)
+            ]
+
+        # Set the dropout mask if training
+        if self.training:
+            self.dropout.update_mask(hx[0].shape, hx[0].is_cuda)
+
+        h_out = self.in_layer(x)
+
+        for i, cell in enumerate(self.cells):
+            hx[i], cx[i] = cell(h_out, (hx[i], cx[i]))
+
+            h_out = hx[i]
+
+            hx[i] = self.dropout(hx[i])
+
+        return self.out_layer(h_out), (hx, cx)
+
 
 class UnrolledLSTM(nn.Module):
     def __init__(
@@ -43,7 +89,7 @@ class UnrolledLSTM(nn.Module):
         for i in range(sequence_length):
             input_x = x[:, i, :].unsqueeze(1)
             _, (hidden, cell) = self.rnn(input_x, (hidden, cell))
-            outputs.append(hidden)
+            outputs.append(hidden)  # TODO outputs.append(hidden.clone())
 
             if self.training and (i == 0):
                 self.dropout.update_mask(hidden.shape, hidden.is_cuda)
