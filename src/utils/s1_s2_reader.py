@@ -23,6 +23,7 @@ class S1S2Reader(Dataset):
         selected_time_points=None,
         include_cloud=False,
         alignment="1to2",
+        filter=None,
         s1_temporal_dropout=0.0,
         s2_temporal_dropout=0.0,
     ):
@@ -46,6 +47,7 @@ class S1S2Reader(Dataset):
             transform=s1_transform,
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
+            filter=filter,
             temporal_dropout=s1_temporal_dropout,
             return_timesteps=True,
         )
@@ -58,6 +60,7 @@ class S1S2Reader(Dataset):
             min_area_to_ignore=min_area_to_ignore,
             selected_time_points=selected_time_points,
             include_cloud=include_cloud,
+            filter=filter,
             temporal_dropout=s2_temporal_dropout,
             return_timesteps=True,
         )
@@ -82,6 +85,8 @@ class S1S2Reader(Dataset):
         self.labels = self.s1_reader.labels
         self.alignment = alignment
 
+        assert len(self.s1_reader.labels) == len(self.s2_reader.labels)
+        
     @staticmethod
     def nearest_ind(items, pivot):
         time_diff = np.abs([date - pivot for date in items])
@@ -97,9 +102,7 @@ class S1S2Reader(Dataset):
         assert s1_fid == s2_fid
         assert s1_label == s2_label
 
-        realign = (
-            s1_timesteps != self.s1_reader.timesteps or s2_timesteps != self.s2_reader.timesteps
-        )
+        realign = (s1_timesteps != self.s1_reader.timesteps).any() or (s2_timesteps != self.s2_reader.timesteps).any()
 
         timesteps = self.timesteps
         if self.alignment == "1to2":

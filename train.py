@@ -16,6 +16,8 @@ from src.utils import train_valid_eval_utils as tveu
 from src.utils.baseline_models import SpatiotemporalModel
 from src.utils.data_loader import DataLoader
 
+import time
+
 seed = 42
 torch.manual_seed(seed)
 np.random.seed(seed)
@@ -26,9 +28,14 @@ torch.cuda.manual_seed_all(seed)
 # Parameters
 # ----------------------------------------------------------------------------------------------------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-competition = "ref_fusion_competition_south_africa"
+
 arg_parser = ArgumentParser()
-arg_parser.add_argument("--competition", type=str, default=competition)
+arg_parser.add_argument(
+    "--competition", 
+    type=str, 
+    default="south_africa",
+    help="germany, south_africa"
+)
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
 arg_parser.add_argument("--num_epochs", type=int, default=100)
@@ -39,7 +46,7 @@ arg_parser.add_argument(
     help="sentinel_1, sentinel_2, or planet_5day, s1_s2, planet_daily, s1_s2_planet_daily",
 )
 arg_parser.add_argument(
-    "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
+    "--pos", type=str, default="both_34", help="both_34, 34S_19E_258N, 34S_19E_259N, 33N_18E_242N"
 )
 arg_parser.add_argument("--lr", type=float, default=0.001)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
@@ -55,6 +62,9 @@ arg_parser.add_argument("--include_bands", type=bool, default=True)
 arg_parser.add_argument("--include_cloud", type=bool, default=True)
 arg_parser.add_argument("--include_ndvi", type=bool, default=False)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
+arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41 for SA, 144 vs. 122)")
+
+# WandB params
 arg_parser.add_argument("--s1_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--s2_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
@@ -64,9 +74,10 @@ arg_parser.add_argument("--ta_probability", type=float, default=0.0)
 
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
-arg_parser.add_argument(
-    "--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41)"
-)
+arg_parser.add_argument("--name", type=str, default=None, help="Manually the run name (e.g., snowy-owl-10); None for automatic naming.")
+arg_parser.add_argument("--unique", dest="unique", action="store_true", help="Make the name unique by appending random digits after the name")
+arg_parser.set_defaults(unique=False)
+arg_parser.add_argument("--project", type=str, default="original", help="original (Ivan), kevin")
 
 config = arg_parser.parse_args().__dict__
 
@@ -78,13 +89,31 @@ assert config["satellite"] in [
     "planet_daily",
     "s1_s2_planet_daily",
 ]
-assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
+assert config["pos"] in ["both_34", "34S_19E_258N", "34S_19E_259N", "33N_18E_242N"]
+assert config["competition"] in ["germany", "south_africa"]
 assert config["split_by"] in [None, "latitude", "longitude"]
+
+if config['competition'] == 'germany':
+    assert config['pos'] == "33N_18E_242N"
+elif config['competition'] == 'south_africa':
+    assert config['pos'] in ['both_34', '34S_19E_258N', '34S_19E_259N']
+
+if config['project'] == 'original':
+    config['project'] = "ai4food-challenge"
+else:
+    config['project'] = "ai4food-challenge-germany"
+
+if str(config['name']) == 'None':
+    config['name'] = None
+elif config['unique']:
+    config['name'] += "_" + str(int(time.time()))[-4:]
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Data loaders
 # ---------------------------------------------------------------------------------------------------------------------
 # Initialize data loaders
 kwargs = dict(
+    competition=config["competition"],
     satellite=config["satellite"],
     include_bands=config["include_bands"],
     include_cloud=config["include_cloud"],
@@ -101,11 +130,13 @@ kwargs = dict(
     planet_temporal_dropout=config["planet_temporal_dropout"],
 )
 
-if config["pos"] == "both":
+if config["pos"] == "both_34":
     label_names_258, reader_258 = load_reader(pos="34S_19E_258N", **kwargs)
     print("\u2713 Loaded 258")
     label_names_259, reader_259 = load_reader(pos="34S_19E_259N", **kwargs)
     print("\u2713 Loaded 259")
+    reader_258.labels.reset_index(inplace=True)
+    reader_259.labels.reset_index(inplace=True)
     assert (
         label_names_258 == label_names_259
     ), f"{label_names_258} and {label_names_259} are not equal"
@@ -114,6 +145,7 @@ if config["pos"] == "both":
     reader.labels = pd.concat([reader_258.labels, reader_259.labels], ignore_index=True)
 else:
     label_names, reader = load_reader(pos=config["pos"], **kwargs)
+    reader.labels.reset_index(inplace=True)
 
 config["num_classes"] = len(label_names)
 config["classes"] = label_names
@@ -175,9 +207,9 @@ if config["lr_scheduler"] == "onecyclelr":
         epochs=config["num_epochs"],
     )
 
-config["weight"] = [1.0, 1.0, 1.0, 1.0, 1.0]
-weight = torch.tensor(config["weight"]).to(DEVICE)
-loss_criterion = CrossEntropyLoss(reduction="mean", weight=weight)
+# config["weight"] = [1.0, 1.0, 1.0, 1.0, 1.0]
+# weight = torch.tensor(config["weight"]).to(DEVICE)
+loss_criterion = CrossEntropyLoss(reduction="mean")
 
 print("\u2713 Optimizer and loss set")
 # ----------------------------------------------------------------------------------------------------------------------
@@ -188,7 +220,8 @@ print(config)
 if config["enable_wandb"]:
     run = wandb.init(
         entity="nasa-harvest",
-        project="ai4food-challenge",
+        project=config['project'],
+        name=config['name'],
         config=config,
         settings=wandb.Settings(start_method="fork"),
     )

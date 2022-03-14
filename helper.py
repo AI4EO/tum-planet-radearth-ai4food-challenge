@@ -18,11 +18,11 @@ from src.utils.s1_s2_reader import S1S2Reader
 
 warnings.filterwarnings(action="ignore", category=ShapelyDeprecationWarning)
 
-competition = "ref_fusion_competition_south_africa"
-root = Path(__file__).parent / "data"
-
+ivan_data_root = "/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/data"
+kevin_data_root = "/cmlscratch/hkjoo/repo/ai4eo/data"
 
 def load_reader(
+    competition: str,
     satellite: str,
     pos: str,
     include_bands: bool,
@@ -40,11 +40,29 @@ def load_reader(
     planet_temporal_dropout: float = 0.0,
     normalize: bool = True,
 ):
-    label_file = (
-        root
-        / f"{competition}_{train_or_test}_labels/{competition}_{train_or_test}_labels_{pos}/labels.geojson"
-    )
+    if competition == "south_africa":
+        country = "ref_fusion_competition_south_africa"
+        root = ivan_data_root
+        year = '2017'
+    elif competition == "germany":
+        country = "dlr_fusion_competition_germany"
+        root = kevin_data_root
+        if train_or_test == 'train':
+            year = '2018'
+        else:
+            year = '2019'
+    else:
+        raise NameError("Please respecify competition correctly.")
+
+    label_file = f"{root}/{country}_{train_or_test}_labels/{country}_{train_or_test}_labels_{pos}/labels.geojson"
     labels = gpd.read_file(label_file)
+
+    if competition == 'germany':
+        with Path("src/s1g_redflag.txt").open('r') as f:
+            sentinel_1_redflags = f.readlines()
+            sentinel_1_redflags = [int(f) for f in "".join(sentinel_1_redflags).split('\n')]
+            labels = labels[~labels.fid.isin(sentinel_1_redflags)]
+
     label_ids = labels["crop_id"].unique()
     label_names = labels["crop_name"].unique()
 
@@ -63,19 +81,19 @@ def load_reader(
     )
 
     fill = ""
-    if train_or_test == "train":
+
+    if train_or_test == "train" and competition == 'south_africa':
         fill = f"_{pos}"
 
-    sentinel_1_tif_folder = f"{competition}_{train_or_test}_source_sentinel_1"
-    sentinel_2_tif_folder = f"{competition}_{train_or_test}_source_sentinel_2"
-    planet_5day_tif_folder = f"{competition}_{train_or_test}_source_planet_5day"
-    planet_daily_tif_folder = f"{competition}_{train_or_test}_source_planet"
-    s1_input_dir = str(
-        root / f"{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_2017"
-    )
-    s2_input_dir = str(root / f"{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_2017")
-    planet_5day_input_dir = str(root / f"{planet_5day_tif_folder}")
-    planet_daily_input_dir = str(root / f"{planet_daily_tif_folder}")
+    sentinel_1_tif_folder = f"{country}_{train_or_test}_source_sentinel_1"
+    sentinel_2_tif_folder = f"{country}_{train_or_test}_source_sentinel_2"
+    planet_5day_tif_folder = f"{country}_{train_or_test}_source_planet_5day"
+    planet_daily_tif_folder = f"{country}_{train_or_test}_source_planet"
+    s1_input_dir = f"{root}/{sentinel_1_tif_folder}/{sentinel_1_tif_folder}{fill}_asc_{pos}_{year}"
+    s2_input_dir = f"{root}/{sentinel_2_tif_folder}/{sentinel_2_tif_folder}{fill}_{pos}_{year}"
+    planet_5day_input_dir = f"{root}/{planet_5day_tif_folder}"
+    planet_daily_input_dir = f"{root}/{planet_daily_tif_folder}"
+    
     if pos == "34S_19E_259N":
         planet_5day_input_dir = planet_5day_input_dir + "_259"
         planet_daily_input_dir = planet_daily_input_dir + "_259"
@@ -97,6 +115,7 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
             transform=s1_transform,
             temporal_dropout=s1_temporal_dropout,
         )
@@ -107,6 +126,7 @@ def load_reader(
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
             include_cloud=include_cloud,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
             transform=s2_transform,
             temporal_dropout=s2_temporal_dropout,
         )
@@ -121,6 +141,7 @@ def load_reader(
             s1_transform=s1_transform,
             s2_transform=s2_transform,
             alignment=alignment,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
             s1_temporal_dropout=s1_temporal_dropout,
             s2_temporal_dropout=s2_temporal_dropout,
         )
@@ -150,6 +171,7 @@ def load_reader(
             label_ids=label_ids,
             label_dir=label_file,
             min_area_to_ignore=min_area_to_ignore,
+            filter=sentinel_1_redflags if competition == 'germany' else None,
             s1_transform=s1_transform,
             s2_transform=s2_transform,
             planet_transform=planet_transform,
@@ -157,5 +179,5 @@ def load_reader(
             s2_temporal_dropout=s2_temporal_dropout,
             planet_temporal_dropout=planet_temporal_dropout,
         )
-
+        
     return label_names, reader
