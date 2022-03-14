@@ -57,6 +57,7 @@ arg_parser.add_argument("--plot_amount", type=int, default=3)
 arg_parser.add_argument("--disable_gp", dest="gp_enabled", action="store_false")
 arg_parser.add_argument("--use_teacher_forcing", dest="teacher_forcing", action="store_true")
 arg_parser.add_argument("--lstm_type", type=str, default="simple")
+arg_parser.add_argument("--num_workers", type=int, default=4)
 arg_parser.set_defaults(gp_enabled=True)
 arg_parser.set_defaults(enable_wandb=True)
 arg_parser.set_defaults(teacher_forcing=False)
@@ -118,8 +119,12 @@ data_loader = DataLoader(
     validation_split=config["validation_split"],
     split_by=config["split_by"],
 )
-train_loader = data_loader.get_train_loader(batch_size=config["batch_size"], num_workers=0)
-valid_loader = data_loader.get_validation_loader(batch_size=config["batch_size"], num_workers=0)
+train_loader = data_loader.get_train_loader(
+    batch_size=config["batch_size"], num_workers=config["num_workers"]
+)
+valid_loader = data_loader.get_validation_loader(
+    batch_size=config["batch_size"], num_workers=config["num_workers"]
+)
 
 config["train_dataset_size"] = len(train_loader.dataset)
 config["train_minibatch_size"] = len(train_loader)
