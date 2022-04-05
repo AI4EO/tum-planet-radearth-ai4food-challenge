@@ -89,6 +89,7 @@ kwargs = dict(
     train_or_test="train",
     planet_temporal_dropout=config["planet_temporal_dropout"],
     normalize=config["normalize"],
+    competition=config["competition"],
 )
 if config["pos"] == "both":
     label_names_258, reader_258 = load_reader(pos="34S_19E_258N", **kwargs)

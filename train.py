@@ -31,10 +31,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 arg_parser = ArgumentParser()
 arg_parser.add_argument(
-    "--competition", 
-    type=str, 
-    default="south_africa",
-    help="germany, south_africa"
+    "--competition", type=str, default="south_africa", help="germany, south_africa"
 )
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
@@ -62,7 +59,12 @@ arg_parser.add_argument("--include_bands", type=bool, default=True)
 arg_parser.add_argument("--include_cloud", type=bool, default=True)
 arg_parser.add_argument("--include_ndvi", type=bool, default=False)
 arg_parser.add_argument("--include_rvi", type=bool, default=False)
-arg_parser.add_argument("--alignment", type=str, default="1to2", help="Can be: 1to2 or 2to1 (76 vs. 41 for SA, 144 vs. 122)")
+arg_parser.add_argument(
+    "--alignment",
+    type=str,
+    default="1to2",
+    help="Can be: 1to2 or 2to1 (76 vs. 41 for SA, 144 vs. 122)",
+)
 
 # WandB params
 arg_parser.add_argument("--s1_temporal_dropout", type=float, default=0.0)
@@ -71,11 +73,22 @@ arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
 arg_parser.add_argument("--lr_scheduler", type=str, default="none")
 arg_parser.add_argument("--ta_model_path", type=str, default="")
 arg_parser.add_argument("--ta_probability", type=float, default=0.0)
+arg_parser.add_argument("--ta_perturb_amount", type=float, default=0.0)
 
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.set_defaults(enable_wandb=True)
-arg_parser.add_argument("--name", type=str, default=None, help="Manually the run name (e.g., snowy-owl-10); None for automatic naming.")
-arg_parser.add_argument("--unique", dest="unique", action="store_true", help="Make the name unique by appending random digits after the name")
+arg_parser.add_argument(
+    "--name",
+    type=str,
+    default=None,
+    help="Manually the run name (e.g., snowy-owl-10); None for automatic naming.",
+)
+arg_parser.add_argument(
+    "--unique",
+    dest="unique",
+    action="store_true",
+    help="Make the name unique by appending random digits after the name",
+)
 arg_parser.set_defaults(unique=False)
 arg_parser.add_argument("--project", type=str, default="original", help="original (Ivan), kevin")
 
@@ -93,20 +106,20 @@ assert config["pos"] in ["both_34", "34S_19E_258N", "34S_19E_259N", "33N_18E_242
 assert config["competition"] in ["germany", "south_africa"]
 assert config["split_by"] in [None, "latitude", "longitude"]
 
-if config['competition'] == 'germany':
-    assert config['pos'] == "33N_18E_242N"
-elif config['competition'] == 'south_africa':
-    assert config['pos'] in ['both_34', '34S_19E_258N', '34S_19E_259N']
+if config["competition"] == "germany":
+    assert config["pos"] == "33N_18E_242N"
+elif config["competition"] == "south_africa":
+    assert config["pos"] in ["both_34", "34S_19E_258N", "34S_19E_259N"]
 
-if config['project'] == 'original':
-    config['project'] = "ai4food-challenge"
+if config["project"] == "original":
+    config["project"] = "ai4food-challenge"
 else:
-    config['project'] = "ai4food-challenge-germany"
+    config["project"] = "ai4food-challenge-germany"
 
-if str(config['name']) == 'None':
-    config['name'] = None
-elif config['unique']:
-    config['name'] += "_" + str(int(time.time()))[-4:]
+if str(config["name"]) == "None":
+    config["name"] = None
+elif config["unique"]:
+    config["name"] += "_" + str(int(time.time()))[-4:]
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Data loaders
@@ -180,6 +193,7 @@ model = SpatiotemporalModel(
     sequencelength=config["sequence_length"],
     ta_model_path=config["ta_model_path"],
     ta_probability=config["ta_probability"],
+    ta_perturb_amount=config["ta_perturb_amount"],
     device=DEVICE,
 )
 
@@ -220,8 +234,8 @@ print(config)
 if config["enable_wandb"]:
     run = wandb.init(
         entity="nasa-harvest",
-        project=config['project'],
-        name=config['name'],
+        project=config["project"],
+        name=config["name"],
         config=config,
         settings=wandb.Settings(start_method="fork"),
     )
