@@ -13,6 +13,7 @@ import os
 import json
 import zipfile
 import glob
+import pandas as pd
 import pdb
 
 from datetime import datetime
@@ -36,6 +37,7 @@ class PlanetReader(torch.utils.data.Dataset):
         tzinfo=None,
         temporal_dropout=0.0,
         return_timesteps=False,
+        csv_dir="",
     ):
         """
         THIS FUNCTION INITIALIZES DATA READER.
@@ -48,28 +50,55 @@ class PlanetReader(torch.utils.data.Dataset):
 
         :return: None
         """
-
-        self.data_transform = transform
+        self.data_transform = transform.transform
         self.selected_time_points = selected_time_points
         self.crop_ids = label_ids
         if label_ids is not None and not isinstance(label_ids, list):
             self.crop_ids = label_ids.tolist()
 
         self.npyfolder = os.path.abspath(input_dir + "/time_series")
-        self.labels = PlanetReader._setup(input_dir, label_dir, self.npyfolder, min_area_to_ignore)
 
-        with (Path(input_dir) / "collection.json").open("rb") as f:
-            planet_collection = json.load(f)
+        self.use_npz = csv_dir == "" or transform.spatial_backbone != "stats"
 
-        start_str, end_str = planet_collection["extent"]["temporal"]["interval"][0]
-        start = datetime.strptime(start_str, "%Y-%m-%dT%H:%M:%SZ")
-        end = datetime.strptime(end_str, "%Y-%m-%dT%H:%M:%SZ")
-        self.timesteps = np.array(
-            [
-                datetime.fromordinal(o).replace(tzinfo=tzinfo)
-                for o in range(start.toordinal(), end.toordinal() + 1)
+        if self.use_npz:
+
+            self.labels = PlanetReader._setup(
+                input_dir, label_dir, self.npyfolder, min_area_to_ignore
+            )
+
+            with (Path(input_dir) / "collection.json").open("rb") as f:
+                planet_collection = json.load(f)
+
+            start_str, end_str = planet_collection["extent"]["temporal"]["interval"][0]
+            start = datetime.strptime(start_str, "%Y-%m-%dT%H:%M:%SZ")
+            end = datetime.strptime(end_str, "%Y-%m-%dT%H:%M:%SZ")
+            self.timesteps = np.array(
+                [
+                    datetime.fromordinal(o).replace(tzinfo=tzinfo)
+                    for o in range(start.toordinal(), end.toordinal() + 1)
+                ]
+            )
+        else:
+            # Read csvs
+            labels = gpd.read_file(label_dir)
+            labels["path"] = labels["fid"].apply(
+                lambda fid: os.path.join(self.npyfolder, f"fid_{fid}.npz")
+            )
+            existing = labels.path.apply(os.path.exists)
+            if not existing.all():
+                print(f"{(~existing).sum()} npz files do not exist")
+            self.labels = labels[existing]
+            all_dfs = [
+                pd.read_csv(p)
+                for p in tqdm(list(glob.glob(csv_dir + "/*.csv")), desc="Reading csvs")
             ]
-        )
+            self.fid_csvs = {
+                df["daily_fid"].iloc[0]: df for df in tqdm(all_dfs, desc="Organizing by fid")
+            }
+            pdb.set_trace()
+            self.timesteps = all_dfs[0]["timesteps"]
+
+            assert len(all_dfs) == len(self.labels)
 
         self.temporal_dropout = temporal_dropout
         self.return_timesteps = return_timesteps
@@ -85,32 +114,46 @@ class PlanetReader(torch.utils.data.Dataset):
         THIS FUNCTION ITERATE OVER THE DATASET BY GIVEN ITEM NO AND RETURNS FOLLOWINGS:
         :return: image_stack in size of [Time Stamp, Image Dimension (Channel), Height, Width] , crop_label, field_mask in size of [Height, Width], field_id, timesteps
         """
-
         feature = self.labels.iloc[item]
+        feature_fid = feature.fid
+        if self.use_npz:
 
-        npyfile = os.path.join(self.npyfolder, "fid_{}.npz".format(feature.fid))
-        if os.path.exists(npyfile):  # use saved numpy array if already created
-            try:
-                object = np.load(npyfile)
-                image_stack = object["image_stack"]
-                mask = object["mask"]
-            except zipfile.BadZipFile:
-                print("ERROR: {} is a bad zipfile...".format(npyfile))
+            npyfile = os.path.join(self.npyfolder, "fid_{}.npz".format(feature.fid))
+            if os.path.exists(npyfile):  # use saved numpy array if already created
+                try:
+                    object = np.load(npyfile)
+                    image_stack = object["image_stack"]
+                    mask = object["mask"]
+                except zipfile.BadZipFile:
+                    print("ERROR: {} is a bad zipfile...".format(npyfile))
+                    raise
+            else:
+                print("ERROR: {} is a missing...".format(npyfile))
                 raise
+
+            if self.crop_ids is not None:
+                label = self.crop_ids.index(feature.crop_id)
+            else:
+                label = feature.crop_id
+
         else:
-            print("ERROR: {} is a missing...".format(npyfile))
-            raise
+            assert feature_fid in self.fid_csvs, f"fid {feature_fid} not found in csv files"
+            df = self.fid_csvs[feature_fid]
+            assert "label" in df.columns
+            assert "daily_fid" in df.columns
+            assert "timesteps" in df.columns
+            assert df["daily_fid"].iloc[0] == feature_fid
+
+            label = df["label"].iloc[0]
+
+            image_stack = df.drop(["daily_fid", "timesteps", "label"], axis=1).values
+            mask = None
 
         if self.data_transform is not None:
             image_stack, mask = self.data_transform(image_stack, mask)
 
         if self.selected_time_points is not None:
             image_stack = image_stack[self.selected_time_points]
-
-        if self.crop_ids is not None:
-            label = self.crop_ids.index(feature.crop_id)
-        else:
-            label = feature.crop_id
 
         if self.temporal_dropout > 0:
             dropout_timesteps = np.random.rand(image_stack.shape[0]) > self.temporal_dropout
@@ -120,14 +163,14 @@ class PlanetReader(torch.utils.data.Dataset):
             timesteps = self.timesteps
 
         if self.return_timesteps:
-            return image_stack, label, mask, feature.fid, timesteps
+            return image_stack, label, mask, feature_fid, timesteps
         elif self.temporal_dropout > 0:
             # pad with zeros to make the image stack of the same size
             target = torch.zeros(len(self.timesteps), *image_stack.shape[1:])
             target[: len(timesteps)] = image_stack
-            return target, label, mask, feature.fid
+            return target, label, mask, feature_fid
         else:
-            return image_stack, label, mask, feature.fid
+            return image_stack, label, mask, feature_fid
 
     @staticmethod
     def _setup(input_dir, label_dir, npyfolder, min_area_to_ignore=1000):
@@ -149,10 +192,15 @@ class PlanetReader(torch.utils.data.Dataset):
         tifs = sorted(inputs)
 
         # read coordinate system of tifs and project labels to the same coordinate reference system (crs)
-        with rio.open(tifs[0]) as image:
-            crs = image.crs
-            print("INFO: Coordinate system of the data is: {}".format(crs))
-            transform = image.transform
+        if "dlr_fusion_competition_germany_train_source_planet_daily" in input_dir:
+            # Needed because the sr.tif files have been removed for space management
+            crs = "EPSG:25833"
+        else:
+            # read coordinate system of tifs and project labels to the same coordinate reference system (crs)
+            with rio.open(tifs[0]) as image:
+                crs = image.crs
+                print("INFO: Coordinate system of the data is: {}".format(crs))
+                transform = image.transform
 
         mask = labels.geometry.area > min_area_to_ignore
         print(
