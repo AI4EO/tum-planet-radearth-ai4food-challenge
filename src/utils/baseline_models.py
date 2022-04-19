@@ -63,6 +63,7 @@ class SpatiotemporalModel(nn.Module):
         pretrained_spatial=True,
         ta_model_path=None,
         ta_probability=0.0,
+        ta_perturb_amount=1e-4,
         device="cpu",
     ):
         super(SpatiotemporalModel, self).__init__()
@@ -81,6 +82,7 @@ class SpatiotemporalModel(nn.Module):
             sequencelength=sequencelength,
             ta_model_path=ta_model_path,
             ta_probability=ta_probability,
+            ta_perturb_amount=ta_perturb_amount,
             device=device,
         )
 
@@ -174,6 +176,7 @@ class TemporalEncoder(nn.Module):
         ta_model_path,
         device,
         ta_probability=0.0,
+        ta_perturb_amount=1e-4,
     ):
         super(TemporalEncoder, self).__init__()
         """
@@ -234,11 +237,17 @@ class TemporalEncoder(nn.Module):
                 dropout=config["lstm_dropout"],
                 input_timesteps=config["input_timesteps"],
                 output_timesteps=config["output_timesteps"],
-                gp_inference_indexes=[10],
+                gp_inference_indexes=[],
                 device=device,
+                gp_enabled=False,
+                teacher_forcing=config["teacher_forcing"],
+                lstm_layers=config["lstm_layers"],
+                lstm_type=config["lstm_type"],
+                perturb_h_indexes=[10, 20],
             )
             self.temporal_augmentation_model.load_state_dict(saved["model_state"])
             self.temporal_augmentation_model.eval()
+            self.temporal_augmentation_model.perturb_amount = ta_perturb_amount
             print("\u2713 Model loaded")
         else:
             self.temporal_augmentation_model = None
@@ -251,7 +260,9 @@ class TemporalEncoder(nn.Module):
             and self.model.training
             and (self.ta_probability > np.random.rand())
         ):
-            x = self.temporal_augmentation_model(x, training=False)
+            with torch.no_grad():
+                self.temporal_augmentation_model.lstm.train()
+                x = self.temporal_augmentation_model(x, training=False)
 
         return self.model(x)
 

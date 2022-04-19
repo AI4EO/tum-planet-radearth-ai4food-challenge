@@ -1,0 +1,16 @@
+program: train.py
+method: grid
+metric:
+  goal: minimize
+  name: losses.valid
+parameters:
+  satellite:
+    value: planet_daily
+  ta_model_path:
+    value: temporal_augment_model_dump/0q2uk8u2/195.pth
+  ta_probability:
+    values: [0.0, 0.2, 0.4, 0.6]
+  ta_perturb_amount:
+    values: [0.001, 0.0001, 0.00001]
+  lr:
+    value: 0.00001

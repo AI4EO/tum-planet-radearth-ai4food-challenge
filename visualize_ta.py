@@ -9,12 +9,11 @@ from src.utils.data_transform import PlanetTransform
 
 
 def get_ndvi(image_stack):
-    PlanetTransform.per_band_mean
     if image_stack.shape[1] == 4:
         red = image_stack[:, 2] * (PlanetTransform.per_band_std[2]) + (
             PlanetTransform.per_band_mean[2]
         )
-        nir = image_stack[:, 3] * (PlanetTransform.per_band_std[2]) + (
+        nir = image_stack[:, 3] * (PlanetTransform.per_band_std[3]) + (
             PlanetTransform.per_band_mean[3]
         )
     elif image_stack.shape[1] == 13:
@@ -62,7 +61,7 @@ def plot_preds(
         if preds_with_dropout > 0:
 
             # Enable dropout
-            if model.lstm_type == "unrolled":
+            if model.lstm_type == "unrolled" or model.lstm_type == "simple":
                 print("Enabling dropout between LSTM cells")
                 model.lstm.train()
             elif model.lstm_type == "pytorch":
