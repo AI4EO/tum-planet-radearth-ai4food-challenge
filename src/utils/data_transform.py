@@ -42,8 +42,8 @@ class EOTransformer:
         # z-normalize
         if self.normalize:
             image_stack = image_stack * 1e-4
-            image_stack -= 0.1014  # + np.random.normal(scale=0.01)
-            image_stack /= 0.1171  # + np.random.normal(scale=0.01)
+            # image_stack -= 0.1014 + np.random.normal(scale=0.01)
+            # image_stack /= 0.1171 + np.random.normal(scale=0.01)
 
         return torch.from_numpy(np.ascontiguousarray(image_stack)).float(), torch.from_numpy(
             np.ascontiguousarray(mask)
@@ -62,9 +62,12 @@ class EOTransformer:
         :param mask: It is spatial mask of the image, to filter out uninterested areas. It is not required in case of having non-spatial data
         :return: image_stack, mask
         """
-        assert (mask > 0).any(), "mask all 0s"
+        assert mask is None or (mask > 0).any(), "mask all 0s"
 
-        if (
+        if self.spatial_backbone == "stats":
+            mask = -1
+
+        elif (
             self.spatial_backbone == "mean_pixel" or self.spatial_backbone == "none"
         ):  # average over field mask: T, D = image_stack.shape
             image_stack = np.mean(image_stack[:, :, mask > 0], axis=2)
@@ -150,10 +153,10 @@ class PlanetTransform(EOTransformer):
 
     def transform(self, image_stack, mask=None):
 
-        image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=True)
+        image_stack, mask = super().transform(image_stack, mask, return_unnormalized_numpy=False)
 
-        if self.normalize:
-            image_stack = (image_stack - self.per_band_mean) / self.per_band_std
+        # if self.normalize:
+        #     image_stack = (image_stack - self.per_band_mean) / self.per_band_std
 
         if self.include_ndvi:
             red = image_stack[:, 2]
