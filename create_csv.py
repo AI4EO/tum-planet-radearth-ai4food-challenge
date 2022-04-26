@@ -131,8 +131,8 @@ def compute_stats(image_stack_channel, prefix):
 ########################################################################################################################
 satellite = "planet_daily"
 competition = "germany"
-train_or_test = "train"
-pos = "33N_18E_242N"
+train_or_test = "test"
+pos = "33N_17E_243N"
 
 ########################################################################################################################
 # Read in features

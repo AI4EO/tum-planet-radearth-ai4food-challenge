@@ -95,7 +95,6 @@ class PlanetReader(torch.utils.data.Dataset):
             self.fid_csvs = {
                 df["daily_fid"].iloc[0]: df for df in tqdm(all_dfs, desc="Organizing by fid")
             }
-            pdb.set_trace()
             self.timesteps = all_dfs[0]["timesteps"]
 
             assert len(all_dfs) == len(self.labels)

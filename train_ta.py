@@ -19,7 +19,7 @@ from helper import load_reader
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-competition = "ref_fusion_competition_south_africa"
+competition = "germany"
 
 # Argument parser for command line arguments
 
@@ -32,7 +32,10 @@ arg_parser.add_argument(
     "--satellite", type=str, default="planet_daily", help="sentinel_2, planet_daily"
 )
 arg_parser.add_argument(
-    "--pos", type=str, default="both", help="Can be: both, 34S_19E_258N, 34S_19E_259N"
+    "--pos",
+    type=str,
+    default="33N_18E_242N",
+    help="Can be: both, 34S_19E_258N, 34S_19E_259N,33N_18E_242N",
 )
 arg_parser.add_argument("--lstm_lr", type=float, default=0.001)
 arg_parser.add_argument("--lstm_weight_decay", type=float, default=1e-6)
@@ -49,7 +52,7 @@ arg_parser.add_argument("--save_model_threshold", type=float, default=0.2)
 arg_parser.add_argument("--gp_loss_weight", type=float, default=0.01)
 arg_parser.add_argument("--gp_inference_index", type=int, default=10)
 arg_parser.add_argument("--gp_interval", type=int, default=1)
-arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
+arg_parser.add_argument("--spatial_backbone", type=str, default="stats")
 arg_parser.add_argument("--disable_wandb", dest="enable_wandb", action="store_false")
 arg_parser.add_argument("--debug", dest="debug", action="store_true")
 arg_parser.add_argument("--planet_temporal_dropout", type=float, default=0.0)
@@ -67,11 +70,10 @@ config = arg_parser.parse_args().__dict__
 
 # Random seeds
 assert config["satellite"] in ["sentinel_2", "planet_daily", "planet_5day"]
-assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N"]
+assert config["pos"] in ["both", "34S_19E_258N", "34S_19E_259N", "33N_18E_242N"]
 assert config["split_by"] in [None, "latitude", "longitude"]
 assert config["loss"] in ["SmoothL1", "MSE", "L1"]
 
-config["normalize"] = True
 config["gp_enabled"] = False
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -88,7 +90,6 @@ kwargs = dict(
     min_area_to_ignore=1000,
     train_or_test="train",
     planet_temporal_dropout=config["planet_temporal_dropout"],
-    normalize=config["normalize"],
     competition=config["competition"],
 )
 if config["pos"] == "both":
