@@ -30,25 +30,26 @@ torch.cuda.manual_seed_all(seed)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 arg_parser = ArgumentParser()
-arg_parser.add_argument(
-    "--competition", type=str, default="south_africa", help="germany, south_africa"
-)
+arg_parser.add_argument("--competition", type=str, default="germany", help="germany, south_africa")
 arg_parser.add_argument("--model_type", type=str, default="spatiotemporal")
 arg_parser.add_argument("--batch_size", type=int, default=64)
 arg_parser.add_argument("--num_epochs", type=int, default=100)
 arg_parser.add_argument(
     "--satellite",
     type=str,
-    default="sentinel_2",
+    default="planet_daily",
     help="sentinel_1, sentinel_2, or planet_5day, s1_s2, planet_daily, s1_s2_planet_daily",
 )
 arg_parser.add_argument(
-    "--pos", type=str, default="both_34", help="both_34, 34S_19E_258N, 34S_19E_259N, 33N_18E_242N"
+    "--pos",
+    type=str,
+    default="33N_18E_242N",
+    help="both_34, 34S_19E_258N, 34S_19E_259N, 33N_18E_242N",
 )
 arg_parser.add_argument("--lr", type=float, default=0.001)
 arg_parser.add_argument("--optimizer", type=str, default="Adam")
 arg_parser.add_argument("--loss", type=str, default="CrossEntropyLoss")
-arg_parser.add_argument("--spatial_backbone", type=str, default="mean_pixel")
+arg_parser.add_argument("--spatial_backbone", type=str, default="stats")
 arg_parser.add_argument("--temporal_backbone", type=str, default="tempcnn")
 arg_parser.add_argument("--image_size", type=int, default=32)
 arg_parser.add_argument("--save_model_threshold", type=float, default=0.7)
@@ -158,7 +159,8 @@ if config["pos"] == "both_34":
     reader.labels = pd.concat([reader_258.labels, reader_259.labels], ignore_index=True)
 else:
     label_names, reader = load_reader(pos=config["pos"], **kwargs)
-    reader.labels.reset_index(inplace=True)
+    if isinstance(reader.labels, pd.DataFrame):
+        reader.labels.reset_index(inplace=True)
 
 config["num_classes"] = len(label_names)
 config["classes"] = label_names

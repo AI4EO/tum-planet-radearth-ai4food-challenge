@@ -1,0 +1,27 @@
+/cmlscratch/izvonkov/tum-planet-radearth-ai4food-challenge/data
+      33N_18E_242N: 2504 .csv files
+    ref_fusion_competition_south_africa_test_source_planet: 488 tifs
+    ref_fusion_competition_south_africa_train_source_planet_259: 488 tifs
+    ref_fusion_competition_south_africa_train_source_planet_5day_259/time_series: 2431 .npz files
+    ref_fusion_competition_south_africa_test_labels_34S_20E_259N: 2417 labels
+    ref_fusion_competition_south_africa_train_source_sentinel_2_34S_19E_259N_34S_19E_259N_2017: 2431 .npz files
+    ref_fusion_competition_south_africa_train_source_sentinel_2_34S_19E_258N_34S_19E_258N_2017: 1712 .npz files
+    ref_fusion_competition_south_africa_train_labels_34S_19E_258N: 1715 labels
+    ref_fusion_competition_south_africa_train_labels_34S_19E_259N: 2436 labels
+    ref_fusion_competition_south_africa_train_source_sentinel_1_34S_19E_258N_asc_34S_19E_258N_2017: 1712 .npz files
+    ref_fusion_competition_south_africa_train_source_sentinel_1_34S_19E_259N_asc_34S_19E_259N_2017: 2435 .npz files
+    ref_fusion_competition_south_africa_test_source_planet_5day: 48 tifs
+    ref_fusion_competition_south_africa_train_source_planet_5day/time_series: 1712 .npz files
+    ref_fusion_competition_south_africa_train_source_planet: 488 tifs
+    ref_fusion_competition_south_africa_test_source_sentinel_2_34S_20E_259N_2017: 2417 .npz files
+    ref_fusion_competition_south_africa_test_source_sentinel_1_asc_34S_20E_259N_2017: 2417 .npz files
+/cmlscratch/hkjoo/repo/ai4eo/data
+    dlr_fusion_competition_germany_train_labels_33N_18E_242N: 2534 labels
+    dlr_fusion_competition_germany_train_source_planet_5day: 73 tifs
+    dlr_fusion_competition_germany_test_source_sentinel_2_33N_17E_243N_2019: 2064 .npz files
+    dlr_fusion_competition_germany_train_source_sentinel_2_33N_18E_242N_2018: 2504 .npz files
+    dlr_fusion_competition_germany_test_labels_33N_17E_243N: 2063 labels
+    dlr_fusion_competition_germany_test_source_planet: 730 tifs
+    dlr_fusion_competition_germany_train_source_sentinel_1_asc_33N_18E_242N_2018: 2504 .npz files
+    dlr_fusion_competition_germany_train_source_planet/time_series: 2504 .npz files
+    dlr_fusion_competition_germany_test_source_planet_5day: 73 tifs

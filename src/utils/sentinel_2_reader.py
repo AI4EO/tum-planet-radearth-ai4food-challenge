@@ -51,7 +51,7 @@ class S2Reader(Dataset):
 
         :return: None
         """
-        self.data_transform = transform
+        self.data_transform = transform.transform
         self.selected_time_points = selected_time_points
         self.crop_ids = label_ids
         if label_ids is not None and not isinstance(label_ids, list):
@@ -59,7 +59,12 @@ class S2Reader(Dataset):
 
         self.npyfolder = input_dir.replace(".zip", "/time_series")
         self.labels = S2Reader._setup(
-            input_dir, label_dir, self.npyfolder, min_area_to_ignore, include_cloud=include_cloud, filter=filter
+            input_dir,
+            label_dir,
+            self.npyfolder,
+            min_area_to_ignore,
+            include_cloud=include_cloud,
+            filter=filter,
         )
 
         with (Path(input_dir) / "timestamp.pkl").open("rb") as f:
@@ -96,7 +101,10 @@ class S2Reader(Dataset):
             raise
 
         if self.data_transform is not None:
-            assert np.argwhere(np.isnan(image_stack)).size == 0 and np.argwhere(np.isinf(image_stack)).size == 0
+            assert (
+                np.argwhere(np.isnan(image_stack)).size == 0
+                and np.argwhere(np.isinf(image_stack)).size == 0
+            )
             image_stack, mask = self.data_transform(image_stack, mask)
 
         if self.selected_time_points is not None:
@@ -121,12 +129,7 @@ class S2Reader(Dataset):
 
     @staticmethod
     def _setup(
-        rootpath,
-        labelgeojson,
-        npyfolder,
-        min_area_to_ignore=1000,
-        include_cloud=False,
-        filter=None
+        rootpath, labelgeojson, npyfolder, min_area_to_ignore=1000, include_cloud=False, filter=None
     ):
         """
         THIS FUNCTION PREPARES THE PLANET READER BY SPLITTING AND RASTERIZING EACH CROP FIELD AND SAVING INTO SEPERATE FILES FOR SPEED UP THE FURTHER USE OF DATA.
